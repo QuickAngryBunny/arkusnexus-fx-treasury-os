@@ -27,6 +27,7 @@ if (settings.DevTenantSwitcherEnabled)
 }
 
 app.MapTenantEndpoints();
+app.MapRateEndpoints();
 
 await app.RunAsync();
 

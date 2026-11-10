@@ -6,6 +6,18 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["dev:web"],
       "port": 3000
+    },
+    {
+      "name": "api-preview",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "src/FxOs.Api", "--", "--urls", "http://localhost:5081"],
+      "port": 5081
+    },
+    {
+      "name": "web-preview",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["FX_API_BASE_URL=http://localhost:5081", "NEXT_DIST_DIR=.next-preview", "pnpm", "--filter", "@fxos/web", "exec", "next", "dev", "--port", "3001"],
+      "port": 3001
     }
   ]
 }

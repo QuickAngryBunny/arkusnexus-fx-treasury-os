@@ -4,7 +4,7 @@ import type { MessageKey } from "@/lib/i18n";
 import { getSession } from "@/lib/session";
 
 /** Top-level section that is not built yet: real title, a short note on what it will hold. */
-export async function SectionPlaceholder({ section }: { section: Exclude<Section, "dashboard"> }) {
+export async function SectionPlaceholder({ section }: { section: Exclude<Section, "dashboard" | "forecast"> }) {
   const { t } = await getSession();
   return (
     <AppShell active={section}>
