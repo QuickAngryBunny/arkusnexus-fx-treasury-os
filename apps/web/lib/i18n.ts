@@ -17,6 +17,10 @@ const catalogs: Record<Locale, Record<MessageKey, string>> = {
 const _sameKeys: Record<keyof typeof enUS, string> = esMX;
 void _sameKeys;
 
+export function isMessageKey(value: string): value is MessageKey {
+  return Object.prototype.hasOwnProperty.call(esMX, value);
+}
+
 export function isLocale(value: unknown): value is Locale {
   return typeof value === "string" && (LOCALES as readonly string[]).includes(value);
 }
@@ -40,8 +44,10 @@ export function formatNumber(locale: Locale, value: number): string {
   return new Intl.NumberFormat(locale).format(value);
 }
 
-/** A rate with its full published precision (Banxico FIX has 4 decimals). */
-export function formatRate(locale: Locale, value: number, digits = 4): string {
+/** Currency values (rates, amounts, errors in currency) are shown with 2 decimals; stored values keep full precision. */
+export const CURRENCY_DIGITS = 2;
+
+export function formatRate(locale: Locale, value: number, digits = CURRENCY_DIGITS): string {
   return new Intl.NumberFormat(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value);
 }
 
@@ -53,4 +59,10 @@ export function formatSigned(locale: Locale, value: number, digits: number, suff
 /** A calendar date (YYYY-MM-DD) shown as written, without shifting it through a time zone. */
 export function formatDate(locale: Locale, isoDate: string, style: "medium" | "long" = "medium"): string {
   return new Intl.DateTimeFormat(locale, { dateStyle: style, timeZone: "UTC" }).format(new Date(`${isoDate}T00:00:00Z`));
+}
+
+/** An amount always with its currency code (house rule), e.g. "USD 1,707,450.00". */
+export function formatMoney(locale: Locale, amount: number, currency: string, digits = CURRENCY_DIGITS): string {
+  const n = new Intl.NumberFormat(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(amount);
+  return `${currency} ${n}`;
 }

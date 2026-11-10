@@ -28,6 +28,8 @@ if (settings.DevTenantSwitcherEnabled)
 
 app.MapTenantEndpoints();
 app.MapRateEndpoints();
+app.MapTreasuryEndpoints();
+app.MapForecastEndpoints();
 
 await app.RunAsync();
 

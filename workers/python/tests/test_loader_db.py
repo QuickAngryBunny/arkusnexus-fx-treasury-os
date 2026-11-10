@@ -75,3 +75,27 @@ def test_a_disabled_source_is_refused(tenant_db):
     tenant_db.execute("update rate_source set is_enabled = false")
     with pytest.raises(SourceNotEnabledError):
         load_observations(tenant_db, "banxico_fix", "raw/a.json", "a" * 64, obs(("2026-11-10", "18.6")))
+
+
+def test_forecasts_publish_once_per_as_of_date_with_backtests(tenant_db):
+    import math as _m
+    import random as _r
+
+    from fxworkers.forecast.publish import publish
+
+    rng, log, day, rows = _r.Random(3), _m.log(17.0), dt.date(2012, 1, 2), []
+    while day <= dt.date(2026, 11, 10):
+        if day.weekday() < 5:
+            log += rng.gauss(0, 0.005)
+            rows.append(Observation(day, Decimal(str(round(_m.exp(log), 4)))))
+        day += dt.timedelta(days=1)
+    load_observations(tenant_db, "banxico_fix", "raw/rw.json", "c" * 64, rows)
+
+    first = publish(tenant_db)
+    second = publish(tenant_db)
+    assert (first.runs_inserted, second.runs_inserted, second.backtests_inserted) == (2, 0, 0)
+    points = tenant_db.execute("select count(*) from forecast_point").fetchone()[0]
+    benchmark = tenant_db.execute(
+        "select min(mae_vs_naive), max(mae_vs_naive) from backtest_result where model_code = 'naive'"
+    ).fetchone()
+    assert points == 12 and benchmark == (Decimal("1.000000"), Decimal("1.000000"))

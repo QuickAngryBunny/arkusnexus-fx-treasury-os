@@ -82,3 +82,55 @@ export type RateHistory = {
   to: string;
   points: { date: string; rate: number }[];
 };
+
+export type BankAccount = {
+  id: string;
+  legalEntityId: string;
+  legalEntityName: string;
+  bankName: string;
+  accountName: string;
+  accountLast4: string;
+  currency: string;
+  kind: "operating" | "payroll" | "savings";
+  feed: { provider: string | null; status: "connected" | "needs_attention" | "disconnected"; lastSyncedAt: string | null };
+  balance: number;
+  lastBookedOn: string | null;
+};
+
+export type MonthlyCashFlow = {
+  month: string;
+  currency: string;
+  income: number;
+  expense: number;
+  net: number;
+  transfersIn: number;
+  transfersOut: number;
+};
+
+export type RateAnalytics = {
+  source: string;
+  date: string;
+  rate: number;
+  changes: { days: number; from: string; fromRate: number; change: number; changePct: number }[];
+  volatility: { days30: number | null; days90: number | null };
+  high52w: { date: string; rate: number };
+  low52w: { date: string; rate: number };
+  sma50: number | null;
+  sma200: number | null;
+  trend: "up" | "down" | "flat" | "unknown";
+};
+
+export type ForecastModel = {
+  code: string;
+  version: string;
+  name: string;
+  description: string;
+  isBenchmark: boolean;
+  asOf: string;
+  lastRate: number;
+  publishedAt: string;
+  points: { horizonDays: number; targetDate: string; point: number; lower80: number; upper80: number; lower95: number; upper95: number }[];
+  backtest: { horizonDays: number; n: number; originsFrom: string; originsTo: string; mae: number; mape: number; coverage80: number; coverage95: number; maeVsNaive: number }[];
+};
+
+export type Forecasts = { source: string; primary: string; models: ForecastModel[] };

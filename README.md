@@ -39,11 +39,12 @@ dotnet run --project src/FxOs.Migrator -- control
 dotnet run --project src/FxOs.Migrator -- provision demo_norte "Demo Norte"
 dotnet run --project src/FxOs.Migrator -- provision demo_bajio "Demo Bajío"
 
-# 3. Dummy company data
-cd workers/python && pip install -e ".[dev]" && fxworkers seed --all-dummy && cd ../..
+# 3. Worker install (rates and forecasts need workers/python/.env with BANXICO_TOKEN; see .env.example)
+cd workers/python && python3 -m venv .venv && .venv/bin/pip install -e ".[dev]" && cd ../..
 
-# 3b. Exchange rates: put your Banxico token in workers/python/.env (see .env.example), then
-cd workers/python && fxworkers rates backfill && cd ../..   # full FIX history since 1991 into every tenant
+# 3b. Real rates first (dummy conversions use the FIX), then dummy company + treasury data, then forecasts
+cd workers/python && .venv/bin/fxworkers rates backfill && .venv/bin/fxworkers curves backfill \
+  && .venv/bin/fxworkers seed --all-dummy && .venv/bin/fxworkers forecast run && cd ../..
 
 # 4. API on http://localhost:5080
 dotnet run --project src/FxOs.Api
@@ -56,7 +57,7 @@ pnpm install && pnpm dev:web
 After the first setup, start everything with one command (also after a restart):
 
 ```bash
-./scripts/dev.sh     # Docker, API (log in .logs/api.log) and web; Ctrl+C stops API and web
+./scripts/dev.sh     # Docker, API (.logs/api.log), rate scheduler (.logs/rates.log) and web; Ctrl+C stops them
 ```
 
 Try the API directly:
@@ -82,6 +83,9 @@ Banxico SIE (SF43718, FIX) ──fetch once──▶ raw store (Blob/Azurite, im
 fxworkers rates backfill                    # full history (about 8,800 days), every tenant
 fxworkers rates sync [--since 2026-10-01]   # last 30 days by default; picks up revisions
 fxworkers rates load --source banxico_fix --raw-ref <key>   # replay a stored response, no network
+fxworkers rates schedule                    # business days 12:30–18:00 Mexico City, retries every 30 min,
+                                            # then syncs curves and refreshes forecasts (started by ./scripts/dev.sh)
+fxworkers curves backfill|sync              # TIIE 28/91/182 (Banxico) + US Treasury 1M–1Y curve, since 2018
 ```
 
 - A rerun changes no rates. A value the source revises replaces the old one, bumps `revision` and is audited.
@@ -89,6 +93,28 @@ fxworkers rates load --source banxico_fix --raw-ref <key>   # replay a stored re
 - API: `GET /api/tenant/rates/sources`, `/api/tenant/rates/{source}/latest`,
   `/api/tenant/rates/{source}?from=YYYY-MM-DD&to=YYYY-MM-DD` (default: 90 days to the latest rate).
 - The token lives only in `workers/python/.env` (git-ignored); it is sent as the `Bmx-Token` header, never stored.
+
+## Dummy treasury data (Phases 0–2)
+
+`fxworkers seed --all-dummy` also writes three connected dummy bank accounts per tenant (US LLC operating USD,
+Mexican S.A. operating MXN, Mexican S.A. USD) and their movements since 2025-01-01: US client collections, a monthly
+intercompany transfer to Mexico, MXN payroll (with December aguinaldo), IMSS, SAT, rent and utilities, local MXN
+clients, and a monthly USD→MXN conversion at the stored FIX minus a bank spread. Both conversion legs keep their
+original amount and the applied rate, its source and time. Values are deterministic per day, so a later run only adds
+new days. API: `/api/tenant/bank-accounts`, `/api/tenant/transactions`, `/api/tenant/cash-flow/monthly` (intercompany
+and conversions reported as transfers, not income or expense).
+
+## Forecasts (Phase 2)
+
+`fxworkers forecast run` publishes, per tenant and from its own rate history, 7/15/30/60/90/180-day forecasts with
+80% and 95% intervals for every registered model, plus a walk-forward backtest since 2019 against the naive benchmark
+(`forecast_model`, `forecast_run`, `forecast_point`, `backtest_result`; a rerun for the same as-of date changes
+nothing). Models, in display order: `forward` (market forward from interest-rate parity: FIX × (1 + TIIE·d/360) /
+(1 + US Treasury·d/365), tenor interpolated, with an EWMA volatility band), `ewma_vol` (point = today's FIX,
+volatility-adaptive band) and `naive` (benchmark). Backtests since 2019 show no model beats naive on the point (the
+forward misses by 1–17% more), so the page presents the forward as today's price to lock in a rate, not a prediction.
+A drift variant was tried and dropped. API: `/api/tenant/rates/{source}/analytics` (trend, volatility, 52-week range,
+changes) and `/api/tenant/forecasts/{source}` (models in `forecast_model.display_order`).
 
 ## Violeta UI (`packages/ui`)
 
