@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "FxOs.Migrator": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

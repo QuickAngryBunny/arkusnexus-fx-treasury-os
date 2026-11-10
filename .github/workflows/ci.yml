@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    name: API (.NET 10) + tenant isolation tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: dotnet restore FxOs.slnx
+      - run: dotnet build FxOs.slnx --no-restore -c Release
+      # Testcontainers starts timescale/timescaledb with the runner's Docker.
+      - run: dotnet test FxOs.slnx --no-build -c Release --logger "trx;LogFileName=results.trx"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: api-test-results
+          path: "**/TestResults/*.trx"
+
+  web:
+    name: Web (Next.js)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # No lockfile is committed yet. After the first local `pnpm install`, commit pnpm-lock.yaml
+      # and switch this to `pnpm install --frozen-lockfile`.
+      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm --filter @fxos/web typecheck
+      - run: pnpm --filter @fxos/web build
+        env:
+          FX_API_BASE_URL: http://localhost:5080
+          FX_DEV_TENANT_SWITCHER: "true"
+
+  workers:
+    name: Python workers
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: workers/python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e ".[dev]"
+      - run: pytest -q

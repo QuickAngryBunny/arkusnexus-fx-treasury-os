@@ -1,0 +1,28 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+TestResults/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+*.egg-info/
+
+# Env and editors
+.env
+.env.*
+!.env.example
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store

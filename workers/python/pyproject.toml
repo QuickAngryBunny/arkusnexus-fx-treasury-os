@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fxworkers"
+version = "0.1.0"
+description = "FX Intelligence & Treasury OS data workers: dummy-data seeding (Phase 0), rate ingestion (Phase 1)."
+requires-python = ">=3.12"
+dependencies = [
+    "psycopg[binary]>=3.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+fxworkers = "fxworkers.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

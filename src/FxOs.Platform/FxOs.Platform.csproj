@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>FxOs.Platform</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="Dapper" />
+  </ItemGroup>
+
+  <!-- SQL migrations live in /db and are embedded so every host (API, Migrator, tests) runs the same files. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\db\control\*.sql" LogicalName="fxos/migrations/control/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\..\db\tenant\*.sql" LogicalName="fxos/migrations/tenant/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

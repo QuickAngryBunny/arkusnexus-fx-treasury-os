@@ -1,0 +1,4 @@
+* text=auto
+# Migration checksums are computed on LF content; keep SQL as LF on every OS.
+*.sql text eol=lf
+*.sh text eol=lf

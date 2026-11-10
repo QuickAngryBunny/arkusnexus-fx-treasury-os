@@ -1,0 +1,27 @@
+# Local development stack for Phase 0.
+# One PostgreSQL server hosts the control-plane database (fx_control) and one database per tenant.
+# The TimescaleDB image is used from day one so Phase 1 hypertables need no infrastructure change.
+services:
+  postgres:
+    image: timescale/timescaledb:2.17.2-pg17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/docker-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:

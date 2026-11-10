@@ -1,0 +1,67 @@
+/*
+ * Phase 0 placeholder tokens in the Violeta direction (violet/plum, rounded cards, Manrope).
+ * Sprint 2 replaces these with the tokens and components from the design canvas (packages/ui).
+ */
+:root {
+  --color-bg: #f6f3fa;
+  --color-surface: #ffffff;
+  --color-text: #221a2e;
+  --color-muted: #6c6280;
+  --color-primary: #6d3fd1;
+  --color-primary-soft: #ece4fb;
+  --color-plum: #4a2050;
+  --color-border: #e4ddef;
+  --color-danger: #b42318;
+  --radius-card: 20px;
+  --radius-control: 12px;
+  --shadow-card: 0 1px 2px rgb(34 26 46 / 6%), 0 8px 24px rgb(34 26 46 / 6%);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-feature-settings: "tnum";
+}
+
+.shell { min-height: 100vh; display: grid; grid-template-rows: auto 1fr; }
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 14px 28px; background: var(--color-plum); color: #fff;
+}
+.brand { font-weight: 800; letter-spacing: -0.01em; }
+.brand small { font-weight: 500; opacity: 0.7; margin-left: 8px; }
+
+.switcher { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.switcher select {
+  font: inherit; padding: 8px 12px; border-radius: var(--radius-control);
+  border: 1px solid rgb(255 255 255 / 30%); background: rgb(255 255 255 / 12%); color: #fff;
+}
+.switcher option { color: var(--color-text); }
+
+main { padding: 28px; max-width: 1200px; width: 100%; margin: 0 auto; }
+
+.notice {
+  display: inline-block; padding: 6px 12px; border-radius: 999px;
+  background: var(--color-primary-soft); color: var(--color-primary); font-size: 13px; font-weight: 600;
+}
+
+h1 { font-size: 28px; letter-spacing: -0.02em; margin: 16px 0 4px; }
+.subtitle { color: var(--color-muted); margin: 0 0 24px; }
+
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.card {
+  background: var(--color-surface); border-radius: var(--radius-card);
+  padding: 20px; box-shadow: var(--shadow-card); border: 1px solid var(--color-border);
+}
+.card h2 { font-size: 15px; margin: 0 0 12px; color: var(--color-muted); font-weight: 600; }
+.stat { font-size: 32px; font-weight: 800; }
+.list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.list li { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
+.list .meta { color: var(--color-muted); }
+.error { color: var(--color-danger); }
+.section { margin-top: 16px; }

@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FxOs.Platform/FxOs.Platform.csproj" />
+    <Project Path="src/FxOs.Api/FxOs.Api.csproj" />
+    <Project Path="src/FxOs.Migrator/FxOs.Migrator.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FxOs.Api.Tests/FxOs.Api.Tests.csproj" />
+  </Folder>
+</Solution>
