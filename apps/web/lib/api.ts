@@ -45,3 +45,4 @@ export type TenantProfile = {
 export type LegalEntity = { id: string; name: string; taxId: string | null; country: string; functionalCurrency: string };
 export type Department = { id: string; name: string; legalEntityId: string | null; legalEntityName: string | null };
 export type AuditEvent = { id: number; occurredAt: string; actor: string; action: string; entityType: string | null; entityId: string | null };
+export type TenantUser = { id: string; email: string; displayName: string; role: "standard" | "admin"; departmentName: string | null };

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { SelectField } from "@fxos/ui";
 import { switchTenant } from "@/app/actions";
 import type { DevTenant } from "@/lib/api";
 
@@ -11,10 +12,10 @@ export function TenantSwitcher({ tenants, current, label, placeholder }: Props) 
   const form = useRef<HTMLFormElement>(null);
 
   return (
-    <form ref={form} action={switchTenant} className="switcher">
-      <label htmlFor="tenant">{label}</label>
-      <select
-        id="tenant"
+    // key: remount after a switch so the uncontrolled select shows the tenant the server now has.
+    <form key={current ?? ""} ref={form} action={switchTenant} className="tenant-switcher">
+      <SelectField
+        label={label}
         name="tenant"
         defaultValue={current ?? ""}
         onChange={() => form.current?.requestSubmit()}
@@ -23,11 +24,11 @@ export function TenantSwitcher({ tenants, current, label, placeholder }: Props) 
         {tenants
           .filter((t) => t.status === "active")
           .map((t) => (
-            <option key={t.slug} value={t.slug}>
-              {t.displayName} ({t.slug})
+            <option key={t.slug} value={t.slug} title={t.slug}>
+              {t.displayName}
             </option>
           ))}
-      </select>
+      </SelectField>
     </form>
   );
 }

@@ -32,7 +32,7 @@ jobs:
           path: "**/TestResults/*.trx"
 
   web:
-    name: Web (Next.js)
+    name: Web (Next.js) + Violeta UI
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,10 +40,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # No lockfile is committed yet. After the first local `pnpm install`, commit pnpm-lock.yaml
-      # and switch this to `pnpm install --frozen-lockfile`.
-      - run: pnpm install --no-frozen-lockfile
-      - run: pnpm --filter @fxos/web typecheck
+      - run: pnpm install --frozen-lockfile
+      # Typechecks packages/ui and apps/web (also proves the ES/EN catalogs have the same keys).
+      - run: pnpm -r typecheck
       - run: pnpm --filter @fxos/web build
         env:
           FX_API_BASE_URL: http://localhost:5080

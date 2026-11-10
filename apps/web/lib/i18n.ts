@@ -1,47 +1,41 @@
-/** Spanish and English from the first screen. Sprint 2 moves this to a proper message catalog. */
-export type Locale = "es-MX" | "en-US";
+import esMX from "@/messages/es-MX.json";
+import enUS from "@/messages/en-US.json";
 
-const messages = {
-  "es-MX": {
-    product: "FX Intelligence",
-    devSwitcher: "Tenant de desarrollo",
-    chooseTenant: "Elige un tenant",
-    noTenants: "No hay tenants. Crea uno con el Migrator: provision <slug> \"<nombre>\".",
-    apiDown: "No se pudo contactar la API",
-    overview: "Resumen del tenant",
-    baseCurrency: "Moneda base",
-    timeZone: "Zona horaria",
-    legalEntities: "Entidades legales",
-    departments: "Departamentos",
-    users: "Usuarios",
-    recentActivity: "Actividad reciente",
-    dummyNotice: "Datos ficticios · entorno interno",
-    signInLater: "El inicio de sesión llega en la Fase 3.",
-  },
-  "en-US": {
-    product: "FX Intelligence",
-    devSwitcher: "Developer tenant",
-    chooseTenant: "Choose a tenant",
-    noTenants: "No tenants yet. Create one with the Migrator: provision <slug> \"<name>\".",
-    apiDown: "Could not reach the API",
-    overview: "Tenant overview",
-    baseCurrency: "Base currency",
-    timeZone: "Time zone",
-    legalEntities: "Legal entities",
-    departments: "Departments",
-    users: "Users",
-    recentActivity: "Recent activity",
-    dummyNotice: "Dummy data · internal environment",
-    signInLater: "Sign-in arrives in Phase 3.",
-  },
-} as const;
+/** Spanish and English from the first screen. Catalogs live in apps/web/messages/<locale>.json. */
+export const LOCALES = ["es-MX", "en-US"] as const;
+export type Locale = (typeof LOCALES)[number];
+export const DEFAULT_LOCALE: Locale = "es-MX";
+export const LOCALE_COOKIE = "fx_locale";
 
-export type MessageKey = keyof (typeof messages)["es-MX"];
+export type MessageKey = keyof typeof esMX;
 
-export function t(locale: Locale, key: MessageKey): string {
-  return messages[locale][key];
+// Both catalogs must have exactly the same keys; a missing or extra key fails the typecheck.
+const catalogs: Record<Locale, Record<MessageKey, string>> = {
+  "es-MX": esMX,
+  "en-US": enUS satisfies Record<MessageKey, string>,
+};
+const _sameKeys: Record<keyof typeof enUS, string> = esMX;
+void _sameKeys;
+
+export function isLocale(value: unknown): value is Locale {
+  return typeof value === "string" && (LOCALES as readonly string[]).includes(value);
+}
+
+export type Translate = (key: MessageKey, vars?: Record<string, string | number>) => string;
+
+/** Returns t(key, vars) for a locale. Placeholders look like {name}. */
+export function translator(locale: Locale): Translate {
+  const messages = catalogs[locale];
+  return (key, vars) => {
+    const text = messages[key];
+    return vars ? text.replace(/\{(\w+)\}/g, (m, name: string) => (name in vars ? String(vars[name]) : m)) : text;
+  };
 }
 
 export function formatDateTime(locale: Locale, iso: string, timeZone: string): string {
   return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short", timeZone }).format(new Date(iso));
+}
+
+export function formatNumber(locale: Locale, value: number): string {
+  return new Intl.NumberFormat(locale).format(value);
 }

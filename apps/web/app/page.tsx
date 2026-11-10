@@ -1,132 +1,107 @@
-import { TenantSwitcher } from "@/components/TenantSwitcher";
-import {
-  apiGet,
-  currentTenant,
-  devSwitcherEnabled,
-  type AuditEvent,
-  type Department,
-  type DevTenant,
-  type LegalEntity,
-  type TenantProfile,
-} from "@/lib/api";
-import { formatDateTime, t, type Locale } from "@/lib/i18n";
+import { AlertBanner, Badge, PageHeader, StatCard } from "@fxos/ui";
+import { AppShell } from "@/components/AppShell";
+import { apiGet, type AuditEvent, type Department, type LegalEntity } from "@/lib/api";
+import { formatDateTime, formatNumber } from "@/lib/i18n";
+import { getSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
-  const switcher = devSwitcherEnabled();
-  const tenant = await currentTenant();
-  const tenants = switcher ? await apiGet<DevTenant[]>("/api/dev/tenants") : null;
+export default async function Dashboard() {
+  const { switcher, tenant, tenants, profile, locale, t } = await getSession();
 
-  const [profile, entities, departments, audit] = tenant
-    ? await Promise.all([
-        apiGet<TenantProfile>("/api/tenant/profile", tenant),
-        apiGet<LegalEntity[]>("/api/tenant/legal-entities", tenant),
-        apiGet<Department[]>("/api/tenant/departments", tenant),
-        apiGet<AuditEvent[]>("/api/tenant/audit?limit=8", tenant),
-      ])
-    : [null, null, null, null];
+  if (!tenant || !profile) {
+    return (
+      <AppShell active="dashboard">
+        {switcher && tenants?.ok && tenants.data.length === 0 ? (
+          <p className="subtitle">{t("dev.noTenants")}</p>
+        ) : (
+          <AlertBanner tone="info" title={t("dev.pickTenantTitle")}>
+            {t("dev.pickTenantBody")}
+          </AlertBanner>
+        )}
+      </AppShell>
+    );
+  }
 
-  const locale: Locale = profile?.ok ? profile.data.locale : "es-MX";
+  if (!profile.ok) {
+    return (
+      <AppShell active="dashboard">
+        <p className="error" role="alert">
+          {profile.message}
+        </p>
+      </AppShell>
+    );
+  }
+
+  const [entities, departments, audit] = await Promise.all([
+    apiGet<LegalEntity[]>("/api/tenant/legal-entities", tenant),
+    apiGet<Department[]>("/api/tenant/departments", tenant),
+    apiGet<AuditEvent[]>("/api/tenant/audit?limit=8", tenant),
+  ]);
+  const p = profile.data;
 
   return (
-    <div className="shell">
-      <header className="topbar">
-        <div className="brand">
-          {t(locale, "product")}
-          <small>Treasury OS · Phase 0</small>
+    <AppShell active="dashboard">
+      <div className="stack">
+        <PageHeader
+          title={p.displayName}
+          eyebrow={t("dashboard.eyebrow", { currency: p.baseCurrency, timeZone: p.timeZone })}
+        />
+
+        <div className="grid">
+          <StatCard label={t("dashboard.legalEntities")} value={formatNumber(locale, p.counts.legalEntities)} />
+          <StatCard label={t("dashboard.departments")} value={formatNumber(locale, p.counts.departments)} />
+          <StatCard label={t("dashboard.users")} value={formatNumber(locale, p.counts.users)} />
         </div>
-        {switcher && tenants?.ok && (
-          <TenantSwitcher
-            tenants={tenants.data}
-            current={tenant}
-            label={t(locale, "devSwitcher")}
-            placeholder={t(locale, "chooseTenant")}
-          />
-        )}
-      </header>
 
-      <main>
-        <span className="notice">{t(locale, "dummyNotice")}</span>
+        <AlertBanner tone="info" kicker={t("dashboard.phaseKicker")} title={t("dashboard.phaseTitle")}>
+          {t("dashboard.phaseBody")}
+        </AlertBanner>
 
-        {!switcher && <p className="subtitle">{t(locale, "signInLater")}</p>}
-        {tenants && !tenants.ok && (
-          <p className="error">
-            {t(locale, "apiDown")}: {tenants.message}
-          </p>
-        )}
-        {tenants?.ok && tenants.data.length === 0 && <p className="subtitle">{t(locale, "noTenants")}</p>}
+        <div className="grid">
+          <section className="card">
+            <h2>{t("dashboard.legalEntities")}</h2>
+            <ul className="list">
+              {entities.ok &&
+                entities.data.map((e) => (
+                  <li key={e.id}>
+                    <span>{e.name}</span>
+                    <span className="meta">
+                      {e.country} · <Badge tone="neutral" dot={false} title={t("dashboard.functionalCurrency")}>{e.functionalCurrency}</Badge>
+                    </span>
+                  </li>
+                ))}
+            </ul>
+          </section>
 
-        {profile && !profile.ok && <p className="error">{profile.message}</p>}
+          <section className="card">
+            <h2>{t("dashboard.departments")}</h2>
+            <ul className="list">
+              {departments.ok &&
+                departments.data.map((d) => (
+                  <li key={d.id}>
+                    <span>{d.name}</span>
+                    <span className="meta">{d.legalEntityName ?? t("dashboard.noEntity")}</span>
+                  </li>
+                ))}
+            </ul>
+          </section>
 
-        {profile?.ok && (
-          <>
-            <h1>{profile.data.displayName}</h1>
-            <p className="subtitle">
-              {t(locale, "overview")} · {t(locale, "baseCurrency")} {profile.data.baseCurrency} · {t(locale, "timeZone")}{" "}
-              {profile.data.timeZone}
-            </p>
-
-            <div className="grid">
-              <Stat label={t(locale, "legalEntities")} value={profile.data.counts.legalEntities} locale={locale} />
-              <Stat label={t(locale, "departments")} value={profile.data.counts.departments} locale={locale} />
-              <Stat label={t(locale, "users")} value={profile.data.counts.users} locale={locale} />
-            </div>
-
-            <div className="grid section">
-              <section className="card">
-                <h2>{t(locale, "legalEntities")}</h2>
-                <ul className="list">
-                  {entities?.ok &&
-                    entities.data.map((e) => (
-                      <li key={e.id}>
-                        <span>{e.name}</span>
-                        <span className="meta">
-                          {e.country} · {e.functionalCurrency}
-                        </span>
-                      </li>
-                    ))}
-                </ul>
-              </section>
-
-              <section className="card">
-                <h2>{t(locale, "departments")}</h2>
-                <ul className="list">
-                  {departments?.ok &&
-                    departments.data.map((d) => (
-                      <li key={d.id}>
-                        <span>{d.name}</span>
-                        <span className="meta">{d.legalEntityName ?? "—"}</span>
-                      </li>
-                    ))}
-                </ul>
-              </section>
-
-              <section className="card">
-                <h2>{t(locale, "recentActivity")}</h2>
-                <ul className="list">
-                  {audit?.ok &&
-                    audit.data.map((a) => (
-                      <li key={a.id}>
-                        <span>{a.action}</span>
-                        <span className="meta">{formatDateTime(locale, a.occurredAt, profile.data.timeZone)}</span>
-                      </li>
-                    ))}
-                </ul>
-              </section>
-            </div>
-          </>
-        )}
-      </main>
-    </div>
-  );
-}
-
-function Stat({ label, value, locale }: { label: string; value: number; locale: Locale }) {
-  return (
-    <section className="card">
-      <h2>{label}</h2>
-      <div className="stat">{new Intl.NumberFormat(locale).format(value)}</div>
-    </section>
+          <section className="card">
+            <h2>{t("dashboard.recentActivity")}</h2>
+            <ul className="list">
+              {audit.ok && audit.data.length === 0 && <li className="meta">{t("dashboard.noActivity")}</li>}
+              {audit.ok &&
+                audit.data.map((a) => (
+                  <li key={a.id}>
+                    <span>{a.action}</span>
+                    <span className="meta">{formatDateTime(locale, a.occurredAt, p.timeZone)}</span>
+                  </li>
+                ))}
+            </ul>
+          </section>
+        </div>
+      </div>
+    </AppShell>
   );
 }

@@ -1,4 +1,3 @@
 packages:
   - "apps/*"
-  # Sprint 2 adds packages/ui (Violeta component library).
   - "packages/*"
