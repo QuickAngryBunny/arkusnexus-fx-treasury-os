@@ -49,6 +49,12 @@ cp apps/web/.env.example apps/web/.env.local
 pnpm install && pnpm dev:web
 ```
 
+After the first setup, start everything with one command (also after a restart):
+
+```bash
+./scripts/dev.sh     # Docker, API (log in .logs/api.log) and web; Ctrl+C stops API and web
+```
+
 Try the API directly:
 
 ```bash
