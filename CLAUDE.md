@@ -45,6 +45,12 @@ Enterprise FX and treasury platform. Built first for Arkus Nexus (USD/MXN exposu
   ES/EN catalogs in `apps/web/messages/`, `/ui` component reference page, placeholder pages for the other sections.
 - UI conventions: build screens from `@fxos/ui`; add tokens/components there, not in app CSS. Every user-facing string
   goes in both catalogs (typecheck fails if keys differ). Pass `linkAs={Link}` to link-rendering components.
-- Next — sprint 3: Azure internal environment, deploy workflow running per-tenant migrations, OpenTelemetry (tenant id
+- Phase 1 started (on top of the sprint 2 branch): tenant migration V0002 (rate_source, fx_rate hypertable,
+  rate_load); `fxworkers rates sync|backfill|load` (Banxico SF43718 → raw store in Blob/Azurite → every tenant,
+  idempotent, revisions audited); `/api/tenant/rates/*`; Forecast Intelligence shows today's FIX + 30 days.
+  Banxico token: `workers/python/.env` only (`BANXICO_TOKEN`), never committed or logged.
+  Phase 1 still to do: DOF connector, scheduled sync per tenant (source + recurrence), gap/duplicate detection and
+  fixes, versioned manual corrections, R-02 full history (year/month/day, chart), export drawer, source-down state.
+- Phase 0 sprint 3 (still open): Azure internal environment, deploy workflow running per-tenant migrations, OpenTelemetry (tenant id
   tag), Grafana, split migration-owner vs app role.
 - Housekeeping: ~50 analyzer warnings to clear before `TreatWarningsAsErrors`.

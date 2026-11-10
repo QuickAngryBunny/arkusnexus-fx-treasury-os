@@ -51,3 +51,10 @@ body {
 
 .subtitle { color: var(--vi-muted); margin: 0; }
 .error { color: var(--vi-orange-ink); font-weight: 700; margin: 0; }
+
+.table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.table th { text-align: left; font-size: 13px; font-weight: 700; color: var(--vi-muted); padding: 0 0 8px; border-bottom: 1px solid var(--vi-line); }
+.table td { padding: 10px 0; border-bottom: 1px solid var(--vi-canvas); font-weight: 600; }
+.table tr:last-child td { border-bottom: 0; }
+.table .num { text-align: right; }
+.caption { margin: 0; font-size: 13px; color: var(--vi-muted); max-width: 72ch; }

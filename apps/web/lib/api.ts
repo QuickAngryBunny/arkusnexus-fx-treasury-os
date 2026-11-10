@@ -46,3 +46,39 @@ export type LegalEntity = { id: string; name: string; taxId: string | null; coun
 export type Department = { id: string; name: string; legalEntityId: string | null; legalEntityName: string | null };
 export type AuditEvent = { id: number; occurredAt: string; actor: string; action: string; entityType: string | null; entityId: string | null };
 export type TenantUser = { id: string; email: string; displayName: string; role: "standard" | "admin"; departmentName: string | null };
+
+export type RateSource = {
+  code: string;
+  name: string;
+  provider: string;
+  seriesId: string;
+  baseCurrency: string;
+  quoteCurrency: string;
+  isEnabled: boolean;
+  firstDate: string | null;
+  lastDate: string | null;
+  points: number;
+  lastLoad: { status: "succeeded" | "failed"; at: string; error: string | null } | null;
+};
+
+export type LatestRate = {
+  source: string;
+  baseCurrency: string;
+  quoteCurrency: string;
+  date: string;
+  rate: number;
+  revision: number;
+  loadedAt: string;
+  previous: { date: string; rate: number } | null;
+  change: number | null;
+  changePct: number | null;
+};
+
+export type RateHistory = {
+  source: string;
+  baseCurrency: string;
+  quoteCurrency: string;
+  from: string;
+  to: string;
+  points: { date: string; rate: number }[];
+};

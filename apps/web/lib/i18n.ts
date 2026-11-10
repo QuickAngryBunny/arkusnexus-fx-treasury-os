@@ -39,3 +39,18 @@ export function formatDateTime(locale: Locale, iso: string, timeZone: string): s
 export function formatNumber(locale: Locale, value: number): string {
   return new Intl.NumberFormat(locale).format(value);
 }
+
+/** A rate with its full published precision (Banxico FIX has 4 decimals). */
+export function formatRate(locale: Locale, value: number, digits = 4): string {
+  return new Intl.NumberFormat(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value);
+}
+
+export function formatSigned(locale: Locale, value: number, digits: number, suffix = ""): string {
+  const text = new Intl.NumberFormat(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits, signDisplay: "exceptZero" }).format(value);
+  return text + suffix;
+}
+
+/** A calendar date (YYYY-MM-DD) shown as written, without shifting it through a time zone. */
+export function formatDate(locale: Locale, isoDate: string, style: "medium" | "long" = "medium"): string {
+  return new Intl.DateTimeFormat(locale, { dateStyle: style, timeZone: "UTC" }).format(new Date(`${isoDate}T00:00:00Z`));
+}

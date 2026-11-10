@@ -22,7 +22,7 @@ src/FxOs.Platform/        Tenancy, provisioning, migrations, secrets, audit
 src/FxOs.Migrator/        CLI: migrate control plane / all tenants, provision dummy tenants
 tests/FxOs.Api.Tests/     xUnit + Testcontainers: tenant isolation, provisioning, audit
 db/control/  db/tenant/   Versioned SQL migrations (V0001__name.sql), embedded into FxOs.Platform
-workers/python/           fxworkers: dummy-data seeder (Phase 0), rate ingestion (Phase 1)
+workers/python/           fxworkers: dummy-data seeder (Phase 0), Banxico rate ingestion (Phase 1)
 docs/decisions/           Architecture decision records
 ```
 
@@ -31,7 +31,7 @@ docs/decisions/           Architecture decision records
 Prerequisites: .NET SDK 10, Node 22 + pnpm 10, Python 3.12+, Docker.
 
 ```bash
-# 1. Postgres (TimescaleDB image) + Redis
+# 1. Postgres (TimescaleDB image), Azurite (raw store) and Redis
 docker compose up -d
 
 # 2. Control plane + two dummy tenants (each gets its own database and login)
@@ -41,6 +41,9 @@ dotnet run --project src/FxOs.Migrator -- provision demo_bajio "Demo Bajío"
 
 # 3. Dummy company data
 cd workers/python && pip install -e ".[dev]" && fxworkers seed --all-dummy && cd ../..
+
+# 3b. Exchange rates: put your Banxico token in workers/python/.env (see .env.example), then
+cd workers/python && fxworkers rates backfill && cd ../..   # full FIX history since 1991 into every tenant
 
 # 4. API on http://localhost:5080
 dotnet run --project src/FxOs.Api
@@ -63,6 +66,30 @@ curl -H "X-Tenant: demo_norte" http://localhost:5080/api/tenant/profile
 curl -H "X-Tenant: demo_bajio" http://localhost:5080/api/tenant/departments
 ```
 
+## Exchange rates (Phase 1)
+
+Only the ingestion worker calls a rate source; the API and web read each tenant's own copy, so history stays
+readable with every connector switched off.
+
+```
+Banxico SIE (SF43718, FIX) ──fetch once──▶ raw store (Blob/Azurite, immutable, keyed by time + sha256)
+                                              │ parse + validate
+                                              ▼
+                         every active tenant DB: fx_rate (hypertable) · rate_load (log) · audit_log
+```
+
+```bash
+fxworkers rates backfill                    # full history (about 8,800 days), every tenant
+fxworkers rates sync [--since 2026-10-01]   # last 30 days by default; picks up revisions
+fxworkers rates load --source banxico_fix --raw-ref <key>   # replay a stored response, no network
+```
+
+- A rerun changes no rates. A value the source revises replaces the old one, bumps `revision` and is audited.
+- `--tenant <slug>` limits any command to one tenant. A tenant without the source enabled is skipped.
+- API: `GET /api/tenant/rates/sources`, `/api/tenant/rates/{source}/latest`,
+  `/api/tenant/rates/{source}?from=YYYY-MM-DD&to=YYYY-MM-DD` (default: 90 days to the latest rate).
+- The token lives only in `workers/python/.env` (git-ignored); it is sent as the `Bmx-Token` header, never stored.
+
 ## Violeta UI (`packages/ui`)
 
 `@fxos/ui` ships TypeScript source that Next compiles (`transpilePackages`). Import the styles once in the root
@@ -77,7 +104,7 @@ Text lives in `apps/web/messages/es-MX.json` and `en-US.json`. The language come
 
 ```bash
 dotnet test FxOs.slnx                 # needs Docker (Testcontainers)
-cd workers/python && pytest -q
+cd workers/python && pytest -q        # loader tests also need FX_TEST_PG_DSN (any Postgres+TimescaleDB superuser DSN)
 pnpm -r typecheck                     # packages/ui + apps/web; also checks ES/EN catalogs have the same keys
 ```
 
