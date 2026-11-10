@@ -15,7 +15,8 @@ A small control-plane database (`fx_control`) holds tenants and database routing
 and load exchange rates from Phase 1.
 
 ```
-apps/web/                 Next.js 15 app (App Router, TypeScript, Manrope, ES/EN)
+apps/web/                 Next.js 15 app (App Router, TypeScript, Manrope, ES/EN catalogs in messages/)
+packages/ui/              @fxos/ui — Violeta component library (tokens, components, styles.css)
 src/FxOs.Api/             .NET 10 REST API (minimal APIs)
 src/FxOs.Platform/        Tenancy, provisioning, migrations, secrets, audit
 src/FxOs.Migrator/        CLI: migrate control plane / all tenants, provision dummy tenants
@@ -62,12 +63,22 @@ curl -H "X-Tenant: demo_norte" http://localhost:5080/api/tenant/profile
 curl -H "X-Tenant: demo_bajio" http://localhost:5080/api/tenant/departments
 ```
 
+## Violeta UI (`packages/ui`)
+
+`@fxos/ui` ships TypeScript source that Next compiles (`transpilePackages`). Import the styles once in the root
+layout (`import "@fxos/ui/styles.css"`) and the components from `@fxos/ui`. Tokens (`--vi-*`) come from the design
+canvas's "Violeta design system" artboard. Components that render links take `linkAs={Link}` for client navigation.
+With the developer switcher on, `/ui` shows every component (open it from the user menu → Development).
+
+Text lives in `apps/web/messages/es-MX.json` and `en-US.json`. The language comes from the user menu (cookie
+`fx_locale`), else the tenant's default locale, else Spanish.
+
 ## Tests
 
 ```bash
 dotnet test FxOs.slnx                 # needs Docker (Testcontainers)
 cd workers/python && pytest -q
-pnpm --filter @fxos/web typecheck
+pnpm -r typecheck                     # packages/ui + apps/web; also checks ES/EN catalogs have the same keys
 ```
 
 `TenantIsolationTests` is the Phase 0 exit criterion: two tenants with separate databases, cross-tenant logins
@@ -87,7 +98,7 @@ rejected without a tenant.
 
 - [x] **Sprint 1** — monorepo; control-plane DB; tenant provisioning (database, login, migrations, routing);
   dummy-data seeder; developer tenant switcher; audit log writer; isolation tests; CI.
-- [ ] **Sprint 2** — Violeta component library in `packages/ui` (Button, Badge, Field, Switch, Segmented, StatCard,
+- [x] **Sprint 2** — Violeta component library in `packages/ui` (Button, Badge, Field, Switch, Segmented, StatCard,
   AlertBanner, PageHeader, Breadcrumb, AppNav with user menu) and the app shell; message catalogs for ES/EN.
 - [ ] **Sprint 3** — Azure environments (internal network only), deploy workflow with per-tenant migrations,
   OpenTelemetry tagged with tenant id, Grafana dashboards, split migration owner vs app role.

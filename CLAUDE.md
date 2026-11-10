@@ -40,11 +40,11 @@ Enterprise FX and treasury platform. Built first for Arkus Nexus (USD/MXN exposu
   with gap/duplicate fixes and manual source sync.
 
 ## Status
-- Phase 0 sprint 1 done (CI green: 14 API tests, web build, 4 Python tests).
-- Next — sprint 2: Violeta component library in `packages/ui` (Button, Badge, Field, Switch, Segmented, StatCard,
-  AlertBanner, PageHeader, Breadcrumb, AppNav with user menu), app shell, ES/EN message catalogs; replace the
-  placeholder tokens in `apps/web/app/globals.css`.
-- Sprint 3: Azure internal environment, deploy workflow running per-tenant migrations, OpenTelemetry (tenant id tag),
-  Grafana, split migration-owner vs app role.
-- Housekeeping: ~50 analyzer warnings to clear before `TreatWarningsAsErrors`; commit `pnpm-lock.yaml` and switch CI
-  to `--frozen-lockfile`.
+- Phase 0 sprints 1–2 done. Sprint 2: `@fxos/ui` (Violeta tokens + Button, Badge, Field/SelectField, Switch,
+  Segmented, StatCard, AlertBanner, PageHeader, Breadcrumb, AppNav, UserMenu), app shell (`components/AppShell.tsx`),
+  ES/EN catalogs in `apps/web/messages/`, `/ui` component reference page, placeholder pages for the other sections.
+- UI conventions: build screens from `@fxos/ui`; add tokens/components there, not in app CSS. Every user-facing string
+  goes in both catalogs (typecheck fails if keys differ). Pass `linkAs={Link}` to link-rendering components.
+- Next — sprint 3: Azure internal environment, deploy workflow running per-tenant migrations, OpenTelemetry (tenant id
+  tag), Grafana, split migration-owner vs app role.
+- Housekeeping: ~50 analyzer warnings to clear before `TreatWarningsAsErrors`.
