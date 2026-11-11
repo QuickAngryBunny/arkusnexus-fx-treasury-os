@@ -17,7 +17,7 @@ type Params = { period?: string; cur?: string | string[]; customer?: string; ent
 
 /**
  * Executive dashboard (P8-01 "Glance" + P8-02 "Focus with filters"): the same real FIX and model forecast as
- * Forecast Intelligence, next to the tenant's treasury figures (dummy data in Phases 0–2).
+ * Exchange Forecast, next to the tenant's treasury figures (dummy data in Phases 0–2).
  */
 export default async function Dashboard({ searchParams }: { searchParams: Promise<Params> }) {
   const params = await searchParams;
@@ -94,7 +94,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     ? `${focus} · ${periodLabel}`
     : t(hour < 12 ? "dash.greeting.morning" : hour < 19 ? "dash.greeting.afternoon" : "dash.greeting.evening", { name: firstName });
 
-  // ── Rate card: same FIX and forward model as Forecast Intelligence ──
+  // ── Rate card: same FIX and forward model as Exchange Forecast ──
   const primary = forecasts.ok ? forecasts.data.models.find((m) => m.code === forecasts.data.primary) : undefined;
   const p30 = primary?.points.find((p) => p.horizonDays === 30);
   const history = await apiGet<RateHistory>(

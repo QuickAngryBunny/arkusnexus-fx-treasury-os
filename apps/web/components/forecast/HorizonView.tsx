@@ -35,8 +35,29 @@ export type ChartLabels = {
   max: string;
   high: string; // hover: top of the 80% range
   low: string; // hover: bottom of the 80% range
-  biggestMove: string;
+  bigMove: string; // legend: flagged move marker
   modelPoints: string; // legend: dots = values published by the model
+  pickHint: string; // "Tap a marker, or Today, …"
+  todayButton: string; // "Today · 11 Nov"
+};
+
+/** One selectable event for the News card: today, or a flagged move. Strings are formatted on the server. */
+export type NewsEvent = {
+  key: string; // "today" | "move:YYYY-MM-DD"
+  kicker: string;
+  rate: string;
+  change: string;
+  changeTone: "up" | "down" | "flat";
+  title: string;
+  why: string;
+  badge: string;
+  badgeTone: "big" | "normal";
+  articles: { title: string; source: string; time: string; url: string }[]; // the most relevant first
+  newsLabel: string; // "Most relevant headlines"
+  note: string; // where the headlines come from, or why there are none
+  historyHref: string;
+  historyLabel: string;
+  readLabel: string;
 };
 
 export type ChartData = {
@@ -45,16 +66,25 @@ export type ChartData = {
   history: { day: number; rate: number }[]; // day = days since 1970-01-01, oldest first
   /** Every published point of the headline model (7, 15, 30, 60, 90, 180 days), oldest first. */
   fan: { horizonDays: number; day: number; point: number; lower80: number; upper80: number; lower95: number; upper95: number }[];
-  marker: { day: number; rate: number; label: string } | null; // biggest one-day move of the year
+  /** Flagged moves (beyond ±2σ), drawn as clickable markers when inside the visible window. */
+  moves: { key: string; day: number; rate: number; aria: string }[];
   labels: ChartLabels;
 };
 
-const Ctx = createContext<{ horizon: HorizonData; horizons: HorizonData[]; select: (key: string) => void } | null>(null);
+type Ctx = {
+  horizon: HorizonData;
+  horizons: HorizonData[];
+  select: (key: string) => void;
+  event: string;
+  selectEvent: (key: string) => void;
+};
+const Ctx = createContext<Ctx | null>(null);
 
 export function HorizonProvider({ horizons, initial, children }: { horizons: HorizonData[]; initial: string; children: ReactNode }) {
   const [key, setKey] = useState(initial);
+  const [event, setEvent] = useState("today");
   const horizon = horizons.find((h) => h.key === key) ?? horizons[0]!;
-  return <Ctx.Provider value={{ horizon, horizons, select: setKey }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ horizon, horizons, select: setKey, event, selectEvent: setEvent }}>{children}</Ctx.Provider>;
 }
 
 function useHorizon() {
@@ -87,7 +117,7 @@ type Hover =
  * (80% dark band, 95% light band, dashed expected value). Hover shows the values under the pointer.
  */
 export function RateChart({ data }: { data: ChartData }) {
-  const { horizon, horizons, select } = useHorizon();
+  const { horizon, horizons, select, event, selectEvent } = useHorizon();
   const [hover, setHover] = useState<Hover | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const L = data.labels;
@@ -146,8 +176,8 @@ export function RateChart({ data }: { data: ChartData }) {
       }
     }
 
-    const marker = data.marker && data.marker.day >= start ? { x: x(data.marker.day), y: y(data.marker.rate), label: data.marker.label } : null;
-    return { hist, start, end, last, x, y, split, yLast, line, grid, ticks, marker, pts,
+    const markers = data.moves.filter((m) => m.day >= start).map((m) => ({ ...m, left: (x(m.day) / W) * 100, top: (y(m.rate) / H) * 100 }));
+    return { hist, start, end, last, x, y, split, yLast, line, grid, ticks, markers, pts,
       band95: band("lower95", "upper95"), band80: band("lower80", "upper80"),
       base: `M${edge("point").join(" L")}` };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -208,7 +238,6 @@ export function RateChart({ data }: { data: ChartData }) {
           ))}
           <path d={`M${geo.split} 0V${H}`} stroke={COLORS.expected} strokeDasharray="2 4" />
           <circle cx={geo.split} cy={geo.yLast} r={6} fill="#FFFFFF" stroke={COLORS.fix} strokeWidth={3} />
-          {geo.marker && <circle cx={geo.marker.x} cy={geo.marker.y} r={9} fill="#FFFFFF" stroke={COLORS.marker} strokeWidth={3} />}
           <g fontFamily="inherit" fontSize={11} fill="#6B6378">
             {geo.grid.map((g) => (
               <text key={g.label} x={4} y={g.y - 4}>{g.label}</text>
@@ -232,6 +261,18 @@ export function RateChart({ data }: { data: ChartData }) {
           )}
           <rect x={0} y={0} width={W} height={H} fill="transparent" onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={() => setHover(null)} />
         </svg>
+
+        {geo.markers.map((m) => (
+          <button
+            key={m.key}
+            type="button"
+            className={`fx-marker${event === m.key ? " is-on" : ""}`}
+            style={{ left: `${m.left}%`, top: `${m.top}%` }}
+            aria-label={m.aria}
+            aria-pressed={event === m.key}
+            onClick={() => selectEvent(m.key)}
+          />
+        ))}
 
         {hover?.kind === "past" && (
           <div className="fx-tip" style={{ left: `${tipLeft}%` }} role="status">
@@ -278,15 +319,55 @@ export function RateChart({ data }: { data: ChartData }) {
         <span className="fx-chart__target">{horizon.targetLabel}</span>
       </div>
 
+      <div className="fx-pick">
+        <span>{L.pickHint}</span>
+        <button type="button" className={`fx-today-btn${event === "today" ? " is-on" : ""}`} aria-pressed={event === "today"} onClick={() => selectEvent("today")}>
+          {L.todayButton}
+        </button>
+      </div>
+
       <ul className="fx-legend">
         <li><i style={{ background: COLORS.fix }} />{L.fix}</li>
         <li><i className="is-dash" style={{ borderColor: COLORS.expected }} />{L.expected}</li>
         <li><i className="is-dot" style={{ background: COLORS.expected }} />{L.modelPoints}</li>
         <li><i className="is-band" style={{ background: COLORS.band80 }} />{L.range80}</li>
         <li><i className="is-band" style={{ background: COLORS.band95 }} />{L.range95}</li>
-        {geo.marker && <li><i className="is-ring" style={{ borderColor: COLORS.marker }} />{L.biggestMove}</li>}
+        {geo.markers.length > 0 && <li><i className="is-ring" style={{ borderColor: COLORS.marker }} />{L.bigMove}</li>}
       </ul>
     </section>
+  );
+}
+
+/** News widget: today's headlines, or those of the selected marker's date (stored by the worker, never live). */
+export function NewsCard({ events }: { events: NewsEvent[] }) {
+  const { event } = useHorizon();
+  const ev = events.find((e) => e.key === event) ?? events[0];
+  if (!ev) return null;
+  const top = ev.articles[0];
+  return (
+    <article className="card fx-why" aria-live="polite">
+      <span className="fx-kicker fx-kicker--brand">{ev.kicker}</span>
+      <div className="fx-why__value">
+        <span className="fx-why__rate">{ev.rate}</span>
+        <span className={ev.changeTone === "up" ? "fx-up" : ev.changeTone === "down" ? "fx-down" : "muted"}>{ev.change}</span>
+      </div>
+      <strong className="fx-why__title">{ev.title}</strong>
+      <p className="fx-why__body">{ev.why}</p>
+      {top && (
+        <a className="fx-news-top" href={top.url} target="_blank" rel="noopener noreferrer">
+          <span className="fx-news-top__text">
+            <span className="fx-news-top__label">{ev.newsLabel}</span>
+            <strong>{top.title}</strong>
+            <span className="fx-news-meta">
+              {top.source} · {top.time} · <span className={`fx-sigma fx-sigma--${ev.badgeTone}`}>{ev.badge}</span>
+            </span>
+          </span>
+          <span className="fx-news-read">{ev.readLabel} ↗</span>
+        </a>
+      )}
+      <span className="caption">{ev.note}</span>
+      <a href={ev.historyHref} className="fx-why__link">{ev.historyLabel}</a>
+    </article>
   );
 }
 

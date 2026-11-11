@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { AlertBanner, Button, HeroCard, PageHeader, StatCard } from "@fxos/ui";
 import { AppShell } from "@/components/AppShell";
-import { ForecastCard, HorizonProvider, RateChart, type ChartData, type HorizonData } from "@/components/forecast/HorizonView";
-import { apiGet, type Forecasts, type LatestRate, type RateAnalytics, type RateHistory, type RateSource } from "@/lib/api";
+import { ForecastCard, HorizonProvider, NewsCard, RateChart, type ChartData, type HorizonData, type NewsEvent } from "@/components/forecast/HorizonView";
+import { apiGet, type Forecasts, type LatestRate, type NewsFeed, type RateAnalytics, type RateHistory, type RateSource } from "@/lib/api";
 import { CURRENCY_DIGITS, formatDateTime, formatRate, formatSigned, type Locale, type MessageKey, type Translate } from "@/lib/i18n";
 import { getSession } from "@/lib/session";
 
@@ -12,7 +12,7 @@ const SOURCE = "banxico_fix";
 const DAY_MS = 86_400_000;
 const toDay = (iso: string) => Math.round(Date.parse(`${iso}T00:00:00Z`) / DAY_MS);
 
-/** Forecast Intelligence (R-01): today, trend, volatility and forecast up front; 12 months → forecast chart; drivers. */
+/** Exchange Forecast (R-01): today, trend, volatility and forecast up front; 12 months → forecast chart; drivers. */
 export default async function ForecastPage() {
   const { tenant, profile, locale, t } = await getSession();
   const fmtDate = (iso: string, opts: Intl.DateTimeFormatOptions) =>
@@ -47,7 +47,10 @@ export default async function ForecastPage() {
 
   const r = latest.data;
   const from = new Date(Date.parse(`${r.date}T00:00:00Z`) - 365 * DAY_MS).toISOString().slice(0, 10);
-  const history = await apiGet<RateHistory>(`/api/tenant/rates/${SOURCE}?from=${from}&to=${r.date}`, tenant);
+  const [history, news] = await Promise.all([
+    apiGet<RateHistory>(`/api/tenant/rates/${SOURCE}?from=${from}&to=${r.date}`, tenant),
+    apiGet<NewsFeed>(`/api/tenant/news?from=${from}`, tenant),
+  ]);
   const source = sources.ok ? sources.data.find((s) => s.code === SOURCE) : undefined;
   const a = analytics.ok ? analytics.data : null;
   const rate = (v: number) => formatRate(locale, v);
@@ -137,14 +140,70 @@ export default async function ForecastPage() {
     };
   });
 
-  // ── Chart data and the year's biggest one-day move ───────
+  // ── Chart data, flagged moves and the news for each (stored by the worker; never a live GNews call) ──
   const points = history.ok ? history.data.points : [];
-  let biggest: { date: string; rate: number; pct: number } | null = null;
-  for (let i = 1; i < points.length; i++) {
-    const pct = (points[i]!.rate / points[i - 1]!.rate - 1) * 100;
-    if (!biggest || Math.abs(pct) > Math.abs(biggest.pct)) biggest = { date: points[i]!.date, rate: points[i]!.rate, pct };
+  const feed = news.ok ? news.data : null;
+  const tz = profile.data.timeZone;
+  const dayMonthYear = (iso: string) => fmtDate(iso, { day: "numeric", month: "short", year: "numeric" });
+  const timeOf = (iso: string) =>
+    new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: tz }).format(new Date(iso));
+  const times = (sigma: number) => formatRate(locale, Math.abs(sigma), 1);
+  const toArticles = (key: string) =>
+    // The widget shows the single most relevant headline.
+    (feed?.windows.find((w) => w.key === key)?.articles ?? []).slice(0, 1).map((x) => ({
+      title: x.title, source: x.sourceName, time: timeOf(x.publishedAt), url: x.url,
+    }));
+  const common = {
+    newsLabel: t("news.label"),
+    readLabel: t("news.read"),
+    historyLabel: t("fx.whyHistory"),
+  };
+
+  const events: NewsEvent[] = [];
+  const scored = feed?.latest;
+  const todayWindow = feed?.windows.find((w) => w.kind === "today");
+  if (scored) {
+    const big = Math.abs(scored.sigma) >= 2;
+    const tw = todayWindow;
+    events.push({
+      ...common,
+      key: "today",
+      kicker: t("news.todayKicker", { date: dayMonthYear(scored.date) }),
+      rate: rate(scored.rate),
+      change: t("news.vsPrevious", { pct: formatSigned(locale, scored.changePct, 2, "%"), day: fmtDate(scored.previousDate, { weekday: "long" }) }),
+      changeTone: scored.changePct > 0 ? "up" : scored.changePct < 0 ? "down" : "flat",
+      title: t(big ? "news.todayBig" : Math.abs(scored.sigma) >= 1 ? "news.todayBusy" : "news.todayNormal"),
+      why: t("news.todayWhy", { n: times(scored.sigma), vol: `${formatRate(locale, scored.vol30Pct, 1)}%` }),
+      badge: t(big ? "news.badgeBig" : "news.badgeNormal", { s: formatRate(locale, Math.abs(scored.sigma), 1) }),
+      badgeTone: big ? "big" : "normal",
+      articles: tw ? toArticles(tw.key) : [],
+      note: tw
+        ? t("news.todayNote", { from: timeOf(tw.from), to: timeOf(tw.to) })
+        : t("news.todayNone"),
+      historyHref: `/forecast/history?view=day&d=${scored.date}`,
+    });
   }
-  const dailySdPct = vol30 ? vol30 / Math.sqrt(252) : null;
+  for (const m of [...(feed?.moves ?? [])].reverse()) {
+    const key = `move:${m.date}`;
+    const w = feed?.windows.find((x) => x.key === key);
+    events.push({
+      ...common,
+      key,
+      kicker: t("news.moveKicker", { date: dayMonthYear(m.date) }),
+      rate: rate(m.rate),
+      change: t("news.inADay", { pct: formatSigned(locale, m.changePct, 2, "%") }),
+      changeTone: m.changePct > 0 ? "up" : "down",
+      title: t(m.changePct > 0 ? "news.moveUp" : "news.moveDown", { s: formatRate(locale, Math.abs(m.sigma), 1) }),
+      why: t(m.changePct > 0 ? "news.moveWhyUp" : "news.moveWhyDown", {
+        pct: formatRate(locale, Math.abs(m.changePct), 2), n: times(m.sigma), vol: `${formatRate(locale, m.vol30Pct, 1)}%`,
+      }),
+      badge: t("news.badgeBig", { s: formatRate(locale, Math.abs(m.sigma), 1) }),
+      badgeTone: "big",
+      articles: w ? toArticles(key) : [],
+      note: w ? (w.articles.length ? t("news.moveNote") : t("news.moveEmpty")) : t("news.moveNone"),
+      historyHref: `/forecast/history?view=day&d=${m.date}`,
+    });
+  }
 
   const chart: ChartData = {
     locale,
@@ -154,9 +213,10 @@ export default async function ForecastPage() {
       horizonDays: p.horizonDays, day: toDay(p.targetDate), point: p.point,
       lower80: p.lower80, upper80: p.upper80, lower95: p.lower95, upper95: p.upper95,
     })),
-    marker: biggest
-      ? { day: toDay(biggest.date), rate: biggest.rate, label: `${fmtDate(biggest.date, { dateStyle: "medium" })}: ${formatSigned(locale, biggest.pct, 1, "%")}` }
-      : null,
+    moves: (feed?.moves ?? []).map((m) => ({
+      key: `move:${m.date}`, day: toDay(m.date), rate: m.rate,
+      aria: t("news.markerAria", { date: dayMonthYear(m.date), pct: formatSigned(locale, m.changePct, 2, "%") }),
+    })),
     labels: {
       today: t("fx.chartToday"),
       forecast: t("fx.chartForecast"),
@@ -169,8 +229,10 @@ export default async function ForecastPage() {
       max: t("fx.legend.max"),
       high: t("fx.legend.high"),
       low: t("fx.legend.low"),
-      biggestMove: t("fx.legend.biggest"),
+      bigMove: t("news.legend"),
       modelPoints: t("fx.legend.modelPoints"),
+      pickHint: t("news.pickHint"),
+      todayButton: t("news.todayButton", { date: fmtDate(r.date, { day: "numeric", month: "short" }) }),
     },
   };
 
@@ -181,6 +243,27 @@ export default async function ForecastPage() {
     ? "—"
     : t(Math.abs(corr) < 0.2 ? "fx.driverWeak" : corr > 0 ? "fx.driverWith" : "fx.driverOpposite", { r: formatSigned(locale, corr, 2) });
   const corrClass = corr === null || Math.abs(corr) < 0.2 ? "muted" : corr > 0 ? "fx-with" : "fx-opposite";
+
+  const driversCard = (
+        <article className="card fx-drivers">
+          <span className="fx-kicker">{t("fx.driversKicker")}</span>
+          {gap ? (
+            <>
+              <div className="fx-driver">
+                <span>{t("fx.driverGap", { gap: formatRate(locale, gap.gapPts) })}</span>
+                <strong className={corrClass}>{corrText}</strong>
+              </div>
+              <div className="fx-driver muted"><span>{t("fx.driverDxy")}</span><span>{t("fx.driverSoon")}</span></div>
+              <div className="fx-driver muted"><span>{t("fx.driverInflation")}</span><span>{t("fx.driverSoon")}</span></div>
+              <p className="fx-drivers__note">
+                {t("fx.driversNote", { mxn: formatRate(locale, gap.mxnRatePct), usd: formatRate(locale, gap.usdRatePct) })}
+              </p>
+            </>
+          ) : (
+            <p className="fx-drivers__note">{t("fx.driversNone")}</p>
+          )}
+        </article>
+  );
 
   const todayRow = (withForecast: boolean) => (
     <section aria-label={t("fx.todayLabel")} className="fx-today">
@@ -201,52 +284,19 @@ export default async function ForecastPage() {
         <HorizonProvider horizons={horizons} initial={horizons.find((h) => h.key === "30D")?.key ?? horizons[0]!.key}>
           {todayRow(true)}
           <RateChart data={chart} />
+          <section className="fx-bottom">
+            <NewsCard events={events} />
+            {driversCard}
+          </section>
         </HorizonProvider>
       ) : (
         <>
           {todayRow(false)}
           <p className="subtitle">{t("fx.noForecast")}</p>
+          <section className="fx-bottom">{driversCard}</section>
         </>
       )}
 
-      <section className="fx-bottom">
-        {biggest && (
-          <article className="card fx-why">
-            <span className="fx-kicker fx-kicker--brand">
-              {t("fx.whyKicker", { date: fmtDate(biggest.date, { day: "numeric", month: "short", year: "numeric" }) })}
-            </span>
-            <div className="fx-why__value">
-              <span className="fx-why__rate">{rate(biggest.rate)}</span>
-              <span className={biggest.pct > 0 ? "fx-up" : "fx-down"}>{t("fx.whyChange", { pct: formatSigned(locale, biggest.pct, 1, "%") })}</span>
-            </div>
-            <strong className="fx-why__title">{t("fx.whyTitle")}</strong>
-            <p className="fx-why__body">{t("fx.whyBody")}</p>
-            <Link href={`/forecast/history?view=day&d=${biggest.date}`} className="fx-why__link">{t("fx.whyHistory")}</Link>
-            <div className="fx-tags">
-              {dailySdPct && <span>{t("fx.whyTimes", { n: formatRate(locale, Math.abs(biggest.pct) / dailySdPct, 1) })}</span>}
-              {vol30 !== null && <span>{t("fx.whyVol", { vol: `${formatRate(locale, vol30, 1)}%` })}</span>}
-            </div>
-          </article>
-        )}
-        <article className="card fx-drivers">
-          <span className="fx-kicker">{t("fx.driversKicker")}</span>
-          {gap ? (
-            <>
-              <div className="fx-driver">
-                <span>{t("fx.driverGap", { gap: formatRate(locale, gap.gapPts) })}</span>
-                <strong className={corrClass}>{corrText}</strong>
-              </div>
-              <div className="fx-driver muted"><span>{t("fx.driverDxy")}</span><span>{t("fx.driverSoon")}</span></div>
-              <div className="fx-driver muted"><span>{t("fx.driverInflation")}</span><span>{t("fx.driverSoon")}</span></div>
-              <p className="fx-drivers__note">
-                {t("fx.driversNote", { mxn: formatRate(locale, gap.mxnRatePct), usd: formatRate(locale, gap.usdRatePct) })}
-              </p>
-            </>
-          ) : (
-            <p className="fx-drivers__note">{t("fx.driversNone")}</p>
-          )}
-        </article>
-      </section>
     </>
   );
 

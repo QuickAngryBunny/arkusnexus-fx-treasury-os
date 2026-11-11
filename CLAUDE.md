@@ -37,7 +37,7 @@ Enterprise FX and treasury platform. Built first for Arkus Nexus (USD/MXN exposu
 ## UI decisions
 - "Violeta" direction: violet/plum, rounded cards, based on the reference mobile app; font **Manrope** (not Urbanist).
 - Inner pages: breadcrumb above the title, no back buttons.
-- Main menu section "Forecast Intelligence" combines rate history, forecast and market intelligence: current rate,
+- Main menu section "Exchange Forecast" (ES "Pronóstico cambiario"; formerly Forecast Intelligence) combines rate history, forecast and market intelligence: current rate,
   trend and volatility up front; forecast ahead; past rates with the reason they moved; full history by year/month/day
   with gap/duplicate fixes and manual source sync.
 
@@ -57,7 +57,7 @@ Enterprise FX and treasury platform. Built first for Arkus Nexus (USD/MXN exposu
   dummy data by `fxworkers seed`; V0004 forecasting (model registry, runs, points with 80/95% intervals, backtests);
   V0005 interest-rate curves (TIIE + US Treasury, `fxworkers curves sync|backfill`) and model display order; models
   `forward` (interest-rate parity), `ewma_vol`, `naive`; `fxworkers forecast run`; APIs for bank accounts, transactions, monthly cash flow, analytics, forecasts; dashboard
-  cash by currency + accounts; Forecast Intelligence follows R-01 (today hero card, trend, 30D volatility level, plum
+  cash by currency + accounts; Exchange Forecast follows R-01 (today hero card, trend, 30D volatility level, plum
   forecast card + 12-month chart with 7D–180D horizon pills, biggest one-day move, rate-gap driver) and
   `/forecast/models` follows P4-04 (leaderboard vs naive per horizon). Build screens from the design canvas artboards
   (R-*, P*-*, J*), not from scratch; "Alert me" (P2-04) stays disabled until built. `/forecast/history` follows R-02:
@@ -67,7 +67,11 @@ Enterprise FX and treasury platform. Built first for Arkus Nexus (USD/MXN exposu
   Dashboard follows P8-01/P8-02: `GET /api/tenant/dashboard?period&currencies&customer&entity` computes cash (USD equiv.
   at today's FIX), USD exposure in MXN entities, period flows at the period's average FIX, a 90-day peso projection
   (same weeks last year, reserve = one month of peso costs) and a recommendation priced with the forward model; the
-  rate card reuses the Forecast Intelligence data. Filters drawer is a GET form (URL state).
+  rate card reuses the Exchange Forecast data. Filters drawer is a GET form (URL state).
+  News (V0007 `rate_move`, `news_window`, `news_article`): `fxworkers news sync` flags moves beyond ±2σ of the previous
+  30 days, fetches GNews once per window into the raw store and copies into every tenant; `GET /api/tenant/news` reads
+  the tenant DB only. R-01 shows move markers, a Today button and the News card. `GNEWS_API_KEY` in
+  `workers/python/.env` only; free plan = last 30 days, 12 h delay, 100 req/day (set `GNEWS_PLAN=paid` to widen).
   Treasury screens and real bank feeds stay in Phase 3. Next in Phase 2: rate alerts with email (P2-04, P2-S2),
   economic indicators/events and "why it moved", driver-based models, R-01 chart with horizon filter and event
   markers, the dashboard convert-or-wait signal.

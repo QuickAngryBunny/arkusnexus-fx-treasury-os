@@ -13,7 +13,7 @@ export type StatCardProps = {
   icon?: ReactNode;
   /** Colour of the value itself (the note keeps `tone`). */
   valueTone?: "default" | "positive" | "negative" | "brand";
-  /** Small uppercase label, as on the Forecast Intelligence cards. */
+  /** Small uppercase label, as on the Exchange Forecast cards. */
   kicker?: boolean;
   /** Extra content under the note (e.g. a level bar). */
   children?: ReactNode;

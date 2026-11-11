@@ -32,6 +32,7 @@ app.MapTreasuryEndpoints();
 app.MapForecastEndpoints();
 app.MapRateHistoryEndpoints();
 app.MapDashboardEndpoints();
+app.MapNewsEndpoints();
 
 await app.RunAsync();
 

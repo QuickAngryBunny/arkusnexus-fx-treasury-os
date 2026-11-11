@@ -65,7 +65,7 @@ body {
 .table .muted { color: var(--vi-muted); font-weight: 500; }
 .table th + th, .table td + td { padding-left: 16px; }
 
-/* ── Forecast Intelligence (R-01) ─────────────────────────── */
+/* ── Exchange Forecast (R-01) ─────────────────────────── */
 .fx-today { display: grid; gap: 14px; grid-template-columns: 1.3fr 1fr 1fr 1fr; }
 .fx-today > * { min-height: 168px; border-radius: var(--vi-radius-panel); }
 .fx-today .vi-stat { padding: 18px 20px; gap: 6px; }
@@ -351,3 +351,32 @@ body {
 .hist-avg__label { font-size: 13px; font-weight: 700; color: var(--vi-muted); }
 .hist-avg__value { font-size: 22px; font-weight: 800; color: var(--vi-plum); font-variant-numeric: tabular-nums; }
 .hist-avg__detail { font-size: 13px; color: var(--vi-ink-2); font-variant-numeric: tabular-nums; }
+
+/* ── News on Exchange Forecast: event markers, Today button, headlines ── */
+.fx-marker {
+  position: absolute; z-index: 2; width: 18px; height: 18px; padding: 0; border-radius: 50%; transform: translate(-50%, -50%);
+  border: 2.5px solid var(--vi-orange); background: var(--vi-white); cursor: pointer;
+}
+.fx-marker:hover { background: var(--vi-orange-soft); }
+.fx-marker.is-on { border-color: var(--vi-plum); background: var(--vi-orange); }
+.fx-marker:focus-visible { outline: none; box-shadow: var(--vi-focus); }
+.fx-pick { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 13px; color: var(--vi-muted); }
+.fx-today-btn {
+  min-height: 36px; padding: 0 14px; border-radius: 999px; border: 1.5px solid var(--vi-line); background: var(--vi-white);
+  color: var(--vi-violet-ink); font: inherit; font-weight: 700; font-size: 13px; cursor: pointer;
+}
+.fx-today-btn.is-on { background: var(--vi-violet); border-color: var(--vi-violet); color: var(--vi-white); }
+.fx-news-top {
+  display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 18px; background: var(--vi-canvas);
+  color: var(--vi-ink); text-decoration: none;
+}
+.fx-news-top:hover { background: var(--vi-mist); }
+.fx-news-top__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.fx-news-top__text strong { font-size: 15px; line-height: 1.4; }
+.fx-news-top__label { font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--vi-muted); }
+.fx-news-meta { font-size: 12px; color: var(--vi-muted); }
+.fx-news-read { flex: 0 0 auto; font-size: 13px; font-weight: 700; color: var(--vi-violet); }
+.fx-sigma { font-weight: 800; }
+.fx-sigma--big { color: var(--vi-orange-ink); }
+.fx-sigma--normal { color: var(--vi-green-ink); }
+@media (max-width: 600px) { .fx-news-read { display: none; } }

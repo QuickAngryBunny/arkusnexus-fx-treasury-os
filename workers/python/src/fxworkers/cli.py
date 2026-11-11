@@ -9,6 +9,7 @@
     fxworkers rates requests                process pending "Sync now" requests once
     fxworkers forecast run                  publish forecasts and backtests for every tenant
     fxworkers curves sync|backfill          TIIE (Banxico) and US Treasury curve, every tenant
+    fxworkers news sync                     flagged moves + GNews headlines (today and each move), every tenant
 """
 
 from __future__ import annotations
@@ -123,6 +124,10 @@ def _schedule(args: argparse.Namespace) -> int:
                     print(f"Curve sync failed: {e}", file=sys.stderr, flush=True)
                 if args.forecast:
                     _forecast(argparse.Namespace(tenant=None))
+                try:
+                    _news(argparse.Namespace(tenant=None, max_windows=20))
+                except Exception as e:  # news is optional context; never block rates or forecasts
+                    print(f"News sync failed: {e}", file=sys.stderr, flush=True)
                 continue
         except Exception as e:  # keep the scheduler alive; the next attempt retries
             print(f"Sync failed: {e}", file=sys.stderr, flush=True)
@@ -149,6 +154,28 @@ def _curves(args: argparse.Namespace) -> int:
                 return 1
             tenants = [tenant]
         return 1 if sync(cp, open_store(), start, today, tenants) else 0
+
+
+def _news(args: argparse.Namespace) -> int:
+    import psycopg
+
+    from .control_plane import control_plane_dsn, find_tenant, list_tenants
+    from .news.sync import sync
+    from .rates.raw_store import open_store
+
+    with psycopg.connect(control_plane_dsn()) as cp:
+        if args.tenant:
+            tenant = find_tenant(cp, args.tenant)
+            if tenant is None:
+                print(f"No provisioned tenant '{args.tenant}'.", file=sys.stderr)
+                return 1
+            tenants = [tenant]
+        else:
+            tenants = [t for t in list_tenants(cp) if t.status == "active"]
+        stats = sync(cp, open_store(), tenants, max_windows=args.max_windows)
+    print(f"news: {stats['tenants']} tenants, {stats['moves']} flagged moves, {stats['windows_fetched']} windows fetched, "
+          f"{stats['requests']} GNews requests", flush=True)
+    return 0
 
 
 def _forecast(args: argparse.Namespace) -> int:
@@ -246,6 +273,13 @@ def main(argv: list[str] | None = None) -> int:
         c = curves_sub.add_parser(name, help=text)
         c.add_argument("--tenant", help="Only this tenant slug (default: every active tenant)")
         c.set_defaults(func=_curves)
+
+    news = sub.add_parser("news", help="USD/MXN news from GNews")
+    news_sub = news.add_subparsers(dest="action", required=True)
+    ns = news_sub.add_parser("sync", help="Flag big moves and load today's and each move's headlines")
+    ns.add_argument("--tenant", help="Only this tenant slug (default: every active tenant)")
+    ns.add_argument("--max-windows", type=int, default=20, help="News windows to fetch this run (2 requests each)")
+    ns.set_defaults(func=_news)
 
     forecast = sub.add_parser("forecast", help="Exchange-rate forecasts")
     forecast_sub = forecast.add_subparsers(dest="action", required=True)

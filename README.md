@@ -86,6 +86,7 @@ fxworkers rates load --source banxico_fix --raw-ref <key>   # replay a stored re
 fxworkers rates schedule                    # business days 12:30–18:00 Mexico City, retries every 30 min,
                                             # then syncs curves and refreshes forecasts (started by ./scripts/dev.sh)
 fxworkers curves backfill|sync              # TIIE 28/91/182 (Banxico) + US Treasury 1M–1Y curve, since 2018
+fxworkers news sync                         # flag big moves (±2σ) and load GNews headlines for today and each move
 fxworkers rates requests                    # process pending "Sync now" / "Re-fetch" requests once
                                             # (the scheduler also does this every minute)
 ```
@@ -117,6 +118,19 @@ volatility-adaptive band) and `naive` (benchmark). Backtests since 2019 show no 
 forward misses by 1–17% more), so the page presents the forward as today's price to lock in a rate, not a prediction.
 A drift variant was tried and dropped. API: `/api/tenant/rates/{source}/analytics` (trend, volatility, 52-week range,
 changes) and `/api/tenant/forecasts/{source}` (models in `forecast_model.display_order`).
+
+## News (Phase 2)
+
+Exchange Forecast marks every **big move** (daily change beyond ±2σ of the previous 30 days) on the chart; tapping a
+marker, or **Today**, shows the move's facts and the most relevant GNews headlines (Spanish from Mexican publishers,
+English when available). `fxworkers news sync` (also run by the scheduler after forecasts) computes the moves from each
+tenant's own rates, fetches each news window once (today since midnight Mexico City; a move from 6 pm the day before to
+noon the day after), keeps the raw response in the raw store, and copies headlines into every tenant (`rate_move`,
+`news_window`, `news_article`). `GET /api/tenant/news?from&to` reads only the tenant database, never GNews.
+
+The key lives only in `workers/python/.env` (`GNEWS_API_KEY`), sent as the `X-Api-Key` header. The free plan reaches
+the last 30 days with a 12-hour delay and 100 requests a day (1 per second): older moves keep their marker and say no
+headlines are stored. Set `GNEWS_PLAN=paid` (history since 2020, real time) and run the sync again to fill them.
 
 ## Violeta UI (`packages/ui`)
 

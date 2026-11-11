@@ -214,3 +214,17 @@ export type Dashboard = {
     | { kind: "exposure" | "none"; exposureUsd: number; mxnAtFix: number; horizon: number | null; mxnLow80: number | null; mxnHigh80: number | null };
   options: { customers: string[]; entities: { id: string; name: string }[]; currencies: string[] };
 };
+
+export type NewsFeed = {
+  latest: { date: string; rate: number; previousDate: string; changePct: number; sigma: number; vol30Pct: number } | null;
+  moves: { date: string; rate: number; changePct: number; sigma: number; vol30Pct: number }[];
+  windows: {
+    key: string;
+    kind: "today" | "move";
+    rateDate: string;
+    from: string;
+    to: string;
+    fetchedAt: string;
+    articles: { rank: number; lang: string; title: string; description: string | null; url: string; sourceName: string; sourceUrl: string | null; publishedAt: string }[];
+  }[];
+};
