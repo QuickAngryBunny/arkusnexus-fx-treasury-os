@@ -30,6 +30,8 @@ app.MapTenantEndpoints();
 app.MapRateEndpoints();
 app.MapTreasuryEndpoints();
 app.MapForecastEndpoints();
+app.MapRateHistoryEndpoints();
+app.MapDashboardEndpoints();
 
 await app.RunAsync();
 

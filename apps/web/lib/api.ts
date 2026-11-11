@@ -29,6 +29,22 @@ export async function apiGet<T>(path: string, tenant?: string): Promise<ApiResul
   }
 }
 
+export async function apiPost<T>(path: string, tenant: string, body: unknown = {}): Promise<ApiResult<T>> {
+  try {
+    const res = await fetch(`${API_BASE_URL}${path}`, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json", "X-Tenant": tenant },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    });
+    const data = (await res.json().catch(() => null)) as (T & { detail?: string; title?: string }) | null;
+    if (!res.ok) return { ok: false, status: res.status, message: data?.detail ?? data?.title ?? res.statusText };
+    return { ok: true, data: data as T };
+  } catch {
+    return { ok: false, status: 0, message: `API unreachable at ${API_BASE_URL}` };
+  }
+}
+
 // Response shapes (mirror src/FxOs.Api/Endpoints).
 export type DevTenant = { slug: string; displayName: string; status: string; isDummy: boolean; schemaVersion: number | null };
 
@@ -118,6 +134,10 @@ export type RateAnalytics = {
   sma50: number | null;
   sma200: number | null;
   trend: "up" | "down" | "flat" | "unknown";
+  previous: { date: string; rate: number } | null;
+  streakWeeks: number;
+  volatilityDetail: { level: "low" | "normal" | "high"; typicalDailyMove: number; peak12m: { month: string; vol: number } | null } | null;
+  rateGap: { mxnSeries: string; mxnRatePct: number; usdSeries: string; usdRatePct: number; gapPts: number; correlation90d: number | null } | null;
 };
 
 export type ForecastModel = {
@@ -134,3 +154,63 @@ export type ForecastModel = {
 };
 
 export type Forecasts = { source: string; primary: string; models: ForecastModel[] };
+
+export type SyncRequest = { id: number; status: "pending" | "running" | "done" | "failed"; requestedAt: string; finishedAt: string | null; result: string | null };
+
+export type HistorySummary = {
+  source: string;
+  firstDate: string | null;
+  lastDate: string | null;
+  observations: number;
+  openGaps: number;
+  duplicates: number;
+  corrections: number;
+  holidaysMarked: number;
+  lastLoad: { status: "succeeded" | "failed"; at: string; error: string | null } | null;
+  lastRequest: SyncRequest | null;
+};
+
+export type HistoryYear = {
+  year: number;
+  months: { month: string; days: number; average: number | null; low: number | null; high: number | null; revised: number; gaps: number }[];
+};
+
+export type DayStatus = "ok" | "revised" | "gap" | "holiday" | "holiday_marked" | "weekend";
+
+export type HistoryMonth = {
+  month: string;
+  days: { date: string; rate: number | null; revision: number; loadedAt: string | null; status: DayStatus }[];
+};
+
+export type HistoryDay = {
+  source: string;
+  provider: string;
+  seriesId: string;
+  baseCurrency: string;
+  quoteCurrency: string;
+  date: string;
+  status: DayStatus;
+  rate: number | null;
+  revision: number | null;
+  loadedAt: string | null;
+  rawRef: string | null;
+  previous: { date: string; rate: number } | null;
+  change: number | null;
+  changePct: number | null;
+  resolution: { resolution: string; note: string | null; resolvedBy: string; resolvedAt: string } | null;
+  versions: { at: string; actor: string; oldRate: string | null; newRate: string | null; rawRef: string | null }[];
+};
+
+export type Dashboard = {
+  asOf: string;
+  fix: { date: string; rate: number; source: string };
+  filters: { period: "month" | "quarter" | "12m"; currencies: string[]; customer: string | null; entity: string | null };
+  cash: { byCurrency: { currency: string; balance: number }[]; totalUsd: number; prevMonthEnd: string; changePct: number | null };
+  exposure: { usdLong: number; hedgedPct: number };
+  flows: { from: string; to: string; fix: number; revenueUsd: number; expensesUsd: number | null; marginPct: number | null; customerSharePct: number | null };
+  pesoProjection: { reserveMxn: number; method: string; steps: { date: string; balance: number; kind: "actual" | "estimated"; belowReserve: boolean }[] } | null;
+  recommendation:
+    | { kind: "liquidity"; date: string; shortfallMxn: number; usdToConvert: number; rate: number; rateSource: string }
+    | { kind: "exposure" | "none"; exposureUsd: number; mxnAtFix: number; horizon: number | null; mxnLow80: number | null; mxnHigh80: number | null };
+  options: { customers: string[]; entities: { id: string; name: string }[]; currencies: string[] };
+};

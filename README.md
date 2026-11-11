@@ -86,6 +86,8 @@ fxworkers rates load --source banxico_fix --raw-ref <key>   # replay a stored re
 fxworkers rates schedule                    # business days 12:30–18:00 Mexico City, retries every 30 min,
                                             # then syncs curves and refreshes forecasts (started by ./scripts/dev.sh)
 fxworkers curves backfill|sync              # TIIE 28/91/182 (Banxico) + US Treasury 1M–1Y curve, since 2018
+fxworkers rates requests                    # process pending "Sync now" / "Re-fetch" requests once
+                                            # (the scheduler also does this every minute)
 ```
 
 - A rerun changes no rates. A value the source revises replaces the old one, bumps `revision` and is audited.

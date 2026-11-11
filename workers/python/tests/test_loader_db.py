@@ -99,3 +99,29 @@ def test_forecasts_publish_once_per_as_of_date_with_backtests(tenant_db):
         "select min(mae_vs_naive), max(mae_vs_naive) from backtest_result where model_code = 'naive'"
     ).fetchone()
     assert points == 12 and benchmark == (Decimal("1.000000"), Decimal("1.000000"))
+
+
+def test_pending_sync_requests_are_fetched_once_and_closed(tenant_db, monkeypatch):
+    import contextlib
+    import types
+
+    from fxworkers.rates import requests as req
+    from fxworkers.rates.raw_store import RawObject
+
+    tenant = types.SimpleNamespace(slug="t1", status="active")
+    for start in ("2026-11-01", None):
+        tenant_db.execute("insert into sync_request (source_code, range_from, requested_by) values ('banxico_fix', %s, 'test')",
+                          (start,))
+    tenant_db.commit()
+
+    calls = []
+    monkeypatch.setattr(req, "list_tenants", lambda cp: [tenant])
+    monkeypatch.setattr(req, "connect_tenant", lambda cp, t: contextlib.nullcontext(tenant_db))
+    monkeypatch.setattr(req, "fetch_to_store", lambda store, src, a, b: calls.append((a, b)) or RawObject("raw/k", "f" * 64, b""))
+    monkeypatch.setattr(req, "load_from_store", lambda cp, store, src, key, ts: print("t1: seen 5, inserted 1") or 0)
+
+    assert req.process_pending(None, None, today=dt.date(2026, 11, 10)) == 2
+    assert calls == [(dt.date(2026, 10, 11), dt.date(2026, 11, 10))]  # one fetch for the union of both ranges
+    rows = tenant_db.execute("select status, result from sync_request order by id").fetchall()
+    assert rows == [("done", "2026-10-11–2026-11-10: seen 5, inserted 1")] * 2
+    assert req.process_pending(None, None, today=dt.date(2026, 11, 10)) == 0

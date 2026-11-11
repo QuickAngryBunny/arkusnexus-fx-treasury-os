@@ -51,13 +51,23 @@ Enterprise FX and treasury platform. Built first for Arkus Nexus (USD/MXN exposu
   `fxworkers rates sync|backfill|load|schedule` (Banxico SF43718 → raw store in Blob/Azurite → every tenant,
   idempotent, revisions audited; schedule = business days 12:30–18:00 Mexico City, started by dev.sh);
   `/api/tenant/rates/*`. Banxico token: `workers/python/.env` only (`BANXICO_TOKEN`), never committed or logged.
-  Still to do: DOF connector, per-tenant source/recurrence settings, gap/duplicate detection and fixes, versioned
-  manual corrections, R-02 full history (year/month/day, chart), export drawer, source-down state.
+  Still to do: DOF connector, per-tenant source/recurrence settings, versioned manual value corrections, export
+  drawer (P2-06), source-down state (P2-S1).
 - Phase 2 (started): V0003 treasury foundation (bank_account, financial_transaction with conversion legs) seeded with
   dummy data by `fxworkers seed`; V0004 forecasting (model registry, runs, points with 80/95% intervals, backtests);
   V0005 interest-rate curves (TIIE + US Treasury, `fxworkers curves sync|backfill`) and model display order; models
   `forward` (interest-rate parity), `ewma_vol`, `naive`; `fxworkers forecast run`; APIs for bank accounts, transactions, monthly cash flow, analytics, forecasts; dashboard
-  cash by currency + accounts; Forecast Intelligence with analytics, forecast table and track record vs naive.
+  cash by currency + accounts; Forecast Intelligence follows R-01 (today hero card, trend, 30D volatility level, plum
+  forecast card + 12-month chart with 7D–180D horizon pills, biggest one-day move, rate-gap driver) and
+  `/forecast/models` follows P4-04 (leaderboard vs naive per horizon). Build screens from the design canvas artboards
+  (R-*, P*-*, J*), not from scratch; "Alert me" (P2-04) stays disabled until built. `/forecast/history` follows R-02:
+  year/month/day views (URL-driven), gaps from a deterministic Mexican bank-holiday calendar (`MexicanBankCalendar`),
+  "Mark holiday" (V0006 `rate_gap_resolution`, audited), "Re-fetch"/"Sync now" record a `sync_request` that the
+  worker's scheduler processes every minute (fetch once, load every tenant), CSV export of the shown view.
+  Dashboard follows P8-01/P8-02: `GET /api/tenant/dashboard?period&currencies&customer&entity` computes cash (USD equiv.
+  at today's FIX), USD exposure in MXN entities, period flows at the period's average FIX, a 90-day peso projection
+  (same weeks last year, reserve = one month of peso costs) and a recommendation priced with the forward model; the
+  rate card reuses the Forecast Intelligence data. Filters drawer is a GET form (URL state).
   Treasury screens and real bank feeds stay in Phase 3. Next in Phase 2: rate alerts with email (P2-04, P2-S2),
   economic indicators/events and "why it moved", driver-based models, R-01 chart with horizon filter and event
   markers, the dashboard convert-or-wait signal.

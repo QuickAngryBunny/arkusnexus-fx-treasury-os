@@ -42,6 +42,9 @@ public sealed class ForecastEndpointsTests(PlatformFixture fx)
         var week = analytics.GetProperty("changes").EnumerateArray().First(c => c.GetProperty("days").GetInt32() == 7);
         Assert.Equal(0.05m, week.GetProperty("change").GetDecimal());
         Assert.True(analytics.GetProperty("volatility").GetProperty("days30").GetDouble() >= 0);
+        Assert.True(analytics.GetProperty("streakWeeks").GetInt32() >= 40);  // rising every week
+        Assert.Equal(19.48m, analytics.GetProperty("previous").GetProperty("rate").GetDecimal());
+        Assert.Equal(JsonValueKind.Null, analytics.GetProperty("rateGap").ValueKind);  // no curves loaded
     }
 
     [Fact]

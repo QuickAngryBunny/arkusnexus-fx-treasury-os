@@ -18,11 +18,11 @@ public static class ForecastEndpoints
         tenant.MapGet("/rates/{source}/analytics", async (string source, ITenantConnectionFactory db, CancellationToken ct) =>
         {
             await using var conn = await db.OpenAsync(ct);
-            // ~14 months of business days covers the 1-year change, 52-week range and 200-day average.
+            // ~5 years of business days: 1-year changes, 52-week range, 200-day average and the volatility percentile.
             var rows = (await conn.QueryAsync<(DateTime Date, decimal Rate)>(new CommandDefinition(
                 """
                 select rate_date, rate from (
-                    select rate_date, rate from fx_rate where source_code = @source order by rate_date desc limit 300
+                    select rate_date, rate from fx_rate where source_code = @source order by rate_date desc limit 1300
                 ) recent order by rate_date
                 """,
                 new { source },
@@ -62,11 +62,26 @@ public static class ForecastEndpoints
                 : sma50 < sma200 * 0.995m ? "down"
                 : "flat";
 
+            var vol30 = AnnualizedVolPct(rates, 21);
+            var volHistory = RollingVol(dates, rates, 21);
+            var gap = await RateGapAsync(conn, dates, rates, lastDate, ct);
+
             return Results.Ok(new
             {
                 Source = source,
                 Date = lastDate,
                 Rate = last,
+                Previous = rates.Length > 1 ? new { Date = dates[^2], Rate = rates[^2] } : null,
+                // Consecutive weekly closes in the same direction: +3 = up three weeks in a row, -2 = down two.
+                StreakWeeks = WeeklyStreak(dates, rates),
+                VolatilityDetail = vol30 is null ? null : new
+                {
+                    Level = VolLevel(vol30.Value, volHistory.Select(v => v.Vol).ToArray()),
+                    // One standard deviation of a daily move, in quote currency.
+                    TypicalDailyMove = Math.Round(last * (decimal)(vol30.Value / 100 / Math.Sqrt(TradingDaysPerYear)), 4),
+                    Peak12m = PeakMonth(volHistory, lastDate.AddDays(-365)),
+                },
+                RateGap = gap,
                 Changes = new[] { Change(7), Change(30), Change(90), Change(365) }.Where(c => c is not null),
                 Volatility = new { Days30 = AnnualizedVolPct(rates, 21), Days90 = AnnualizedVolPct(rates, 63) },
                 High52w = new { Date = dates[hi], Rate = rates[hi] },
@@ -162,6 +177,146 @@ public static class ForecastEndpoints
                 }),
             });
         });
+    }
+
+    /// <summary>Weekly closes (last rate of each ISO week); counts the latest run of moves in one direction.</summary>
+    private static int WeeklyStreak(DateOnly[] dates, decimal[] rates)
+    {
+        var closes = dates.Select((d, i) => (Week: System.Globalization.ISOWeek.GetYear(d.ToDateTime(TimeOnly.MinValue)) * 100
+                                                     + System.Globalization.ISOWeek.GetWeekOfYear(d.ToDateTime(TimeOnly.MinValue)), Rate: rates[i]))
+            .GroupBy(x => x.Week).Select(g => g.Last().Rate).ToArray();
+        var streak = 0;
+        for (var i = closes.Length - 1; i > 0; i--)
+        {
+            var dir = Math.Sign(closes[i] - closes[i - 1]);
+            if (dir == 0 || (streak != 0 && Math.Sign(streak) != dir))
+            {
+                break;
+            }
+
+            streak += dir;
+        }
+
+        return streak;
+    }
+
+    /// <summary>21-day annualized volatility at each date (from the 22nd observation on).</summary>
+    private static List<(DateOnly Date, double Vol)> RollingVol(DateOnly[] dates, decimal[] rates, int n)
+    {
+        var rets = new double[rates.Length];
+        for (var i = 1; i < rates.Length; i++)
+        {
+            rets[i] = Math.Log((double)rates[i] / (double)rates[i - 1]);
+        }
+
+        var result = new List<(DateOnly, double)>();
+        for (var end = n; end < rates.Length; end++)
+        {
+            var window = rets.AsSpan(end - n + 1, n);
+            double mean = 0, sq = 0;
+            foreach (var r in window) { mean += r; }
+            mean /= n;
+            foreach (var r in window) { sq += (r - mean) * (r - mean); }
+            result.Add((dates[end], Math.Sqrt(sq / (n - 1) * TradingDaysPerYear) * 100));
+        }
+
+        return result;
+    }
+
+    /// <summary>low / normal / high by where today's volatility sits in its own recent history (thirds).</summary>
+    private static string VolLevel(double current, double[] history)
+    {
+        if (history.Length < 60)
+        {
+            return "normal";
+        }
+
+        var below = history.Count(v => v < current) / (double)history.Length;
+        return below < 1 / 3.0 ? "low" : below > 2 / 3.0 ? "high" : "normal";
+    }
+
+    /// <summary>The month (YYYY-MM) with the highest 21-day volatility since <paramref name="since"/>.</summary>
+    private static object? PeakMonth(List<(DateOnly Date, double Vol)> vols, DateOnly since)
+    {
+        var recent = vols.Where(v => v.Date > since).ToList();
+        if (recent.Count == 0)
+        {
+            return null;
+        }
+
+        var peak = recent.MaxBy(v => v.Vol);
+        return new { Month = peak.Date.ToString("yyyy-MM", System.Globalization.CultureInfo.InvariantCulture), Vol = Math.Round(peak.Vol, 2) };
+    }
+
+    /// <summary>
+    /// MXN–USD short-rate gap (TIIE 28 − US Treasury 1 month) and how USD/MXN daily changes have moved with daily changes
+    /// of that gap over the last 63 business days (~90 calendar days). Null when the curves are not loaded.
+    /// </summary>
+    private static async Task<object?> RateGapAsync(Npgsql.NpgsqlConnection conn, DateOnly[] dates, decimal[] rates,
+        DateOnly lastDate, CancellationToken ct)
+    {
+        var points = (await conn.QueryAsync<(string Code, DateTime Date, decimal Pct)>(new CommandDefinition(
+            """
+            select series_code, rate_date, rate_pct from interest_rate
+            where series_code in ('tiie_28', 'ust_1m') and rate_date between @from and @to
+            order by rate_date
+            """,
+            new { from = lastDate.AddDays(-200).ToDateTime(TimeOnly.MinValue), to = lastDate.ToDateTime(TimeOnly.MinValue) },
+            cancellationToken: ct))).ToList();
+
+        decimal? AsOf(string code, DateOnly day) =>
+            points.LastOrDefault(p => p.Code == code && DateOnly.FromDateTime(p.Date) <= day && DateOnly.FromDateTime(p.Date) >= day.AddDays(-10)) is var p
+            && p.Code is not null ? p.Pct : null;
+
+        var mxn = AsOf("tiie_28", lastDate);
+        var usd = AsOf("ust_1m", lastDate);
+        if (mxn is null || usd is null)
+        {
+            return null;
+        }
+
+        var fx = new List<double>();
+        var gaps = new List<double>();
+        for (var i = Math.Max(1, dates.Length - 63); i < dates.Length; i++)
+        {
+            var g0 = AsOf("tiie_28", dates[i - 1]) - AsOf("ust_1m", dates[i - 1]);
+            var g1 = AsOf("tiie_28", dates[i]) - AsOf("ust_1m", dates[i]);
+            if (g0 is null || g1 is null)
+            {
+                continue;
+            }
+
+            fx.Add(Math.Log((double)rates[i] / (double)rates[i - 1]));
+            gaps.Add((double)(g1.Value - g0.Value));
+        }
+
+        return new
+        {
+            MxnSeries = "tiie_28",
+            MxnRatePct = mxn,
+            UsdSeries = "ust_1m",
+            UsdRatePct = usd,
+            GapPts = mxn - usd,
+            Correlation90d = Correlation(fx, gaps),
+        };
+    }
+
+    private static double? Correlation(List<double> x, List<double> y)
+    {
+        if (x.Count < 20)
+        {
+            return null;
+        }
+
+        double mx = x.Average(), my = y.Average(), sxy = 0, sxx = 0, syy = 0;
+        for (var i = 0; i < x.Count; i++)
+        {
+            sxy += (x[i] - mx) * (y[i] - my);
+            sxx += (x[i] - mx) * (x[i] - mx);
+            syy += (y[i] - my) * (y[i] - my);
+        }
+
+        return sxx == 0 || syy == 0 ? null : Math.Round(sxy / Math.Sqrt(sxx * syy), 2);
     }
 
     private static decimal Pct(decimal now, decimal then) => Math.Round((now - then) / then * 100m, 4);

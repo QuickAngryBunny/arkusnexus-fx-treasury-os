@@ -6,6 +6,7 @@
     fxworkers rates backfill                fetch each source's full history, load every tenant
     fxworkers rates load --raw-ref KEY      replay a stored raw response (no network call)
     fxworkers rates schedule                run sync every business day after the FIX is published
+    fxworkers rates requests                process pending "Sync now" requests once
     fxworkers forecast run                  publish forecasts and backtests for every tenant
     fxworkers curves sync|backfill          TIIE (Banxico) and US Treasury curve, every tenant
 """
@@ -102,9 +103,14 @@ def _schedule(args: argparse.Namespace) -> int:
         today = now.astimezone(schedule.tz).date()
         when = next_run(now, schedule, done_today=(done_for == today))
         wait = (when - now).total_seconds()
+        try:
+            _requests(argparse.Namespace())  # "Sync now" from the Full history page, checked every minute
+        except Exception as e:
+            print(f"Sync requests failed: {e}", file=sys.stderr, flush=True)
         if wait > 0:
-            print(f"Next sync at {when.isoformat(timespec='minutes')}", flush=True)
-            time.sleep(min(wait, 3600))  # wake at least hourly so clock changes are picked up
+            if int(wait) % 3600 < 60:
+                print(f"Next sync at {when.isoformat(timespec='minutes')}", flush=True)
+            time.sleep(min(wait, 60))
             continue
         print(f"Sync attempt at {now.isoformat(timespec='seconds')}", flush=True)
         try:
@@ -173,6 +179,18 @@ def _forecast(args: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
+def _requests(args: argparse.Namespace) -> int:
+    import psycopg
+
+    from .control_plane import control_plane_dsn
+    from .rates.raw_store import open_store
+    from .rates.requests import process_pending
+
+    with psycopg.connect(control_plane_dsn()) as cp:
+        process_pending(cp, open_store())
+    return 0
+
+
 def _have_fix_for(day) -> bool:
     """True when every active tenant holds a FIX for `day` (published or not, the window then ends the day)."""
     import psycopg
@@ -234,6 +252,9 @@ def main(argv: list[str] | None = None) -> int:
     fr = forecast_sub.add_parser("run", help="Publish forecasts and backtests from each tenant's rate history")
     fr.add_argument("--tenant", help="Only this tenant slug (default: every active tenant)")
     fr.set_defaults(func=_forecast)
+
+    req = rates_sub.add_parser("requests", help='Process pending "Sync now" requests once')
+    req.set_defaults(func=_requests)
 
     sched = rates_sub.add_parser("schedule", help="Run sync every business day after the FIX is published")
     sched.add_argument("--at", default="12:30", help="Window start, Mexico City time (default 12:30)")
