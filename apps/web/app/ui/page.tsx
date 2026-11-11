@@ -81,7 +81,7 @@ export default async function ComponentsPage() {
           <div className="grid">
             <StatCard label={t("ui.statLabel")} value="USD 1,707,450" note={t("ui.statNote")} tone="positive" />
             <StatCard label="USD/MXN" value="18.4215" note="−0.8%" tone="negative" />
-            <StatCard label={t("dashboard.users")} value="12" />
+            <StatCard label={t("hist.observations")} value="8,796" />
           </div>
           <AlertBanner tone="info" kicker={t("ui.bannerKicker")} title={t("ui.bannerTitle")}
             action={{ label: t("ui.bannerAction"), href: "#" }}>

@@ -2,6 +2,7 @@
 (CI provides one); skipped otherwise. Applies the real tenant migrations, so it also checks they run."""
 
 import datetime as dt
+import json
 import os
 import uuid
 from decimal import Decimal
@@ -75,3 +76,106 @@ def test_a_disabled_source_is_refused(tenant_db):
     tenant_db.execute("update rate_source set is_enabled = false")
     with pytest.raises(SourceNotEnabledError):
         load_observations(tenant_db, "banxico_fix", "raw/a.json", "a" * 64, obs(("2026-11-10", "18.6")))
+
+
+def test_forecasts_publish_once_per_as_of_date_with_backtests(tenant_db):
+    import math as _m
+    import random as _r
+
+    from fxworkers.forecast.publish import publish
+
+    rng, log, day, rows = _r.Random(3), _m.log(17.0), dt.date(2012, 1, 2), []
+    while day <= dt.date(2026, 11, 10):
+        if day.weekday() < 5:
+            log += rng.gauss(0, 0.005)
+            rows.append(Observation(day, Decimal(str(round(_m.exp(log), 4)))))
+        day += dt.timedelta(days=1)
+    load_observations(tenant_db, "banxico_fix", "raw/rw.json", "c" * 64, rows)
+
+    first = publish(tenant_db)
+    second = publish(tenant_db)
+    assert (first.runs_inserted, second.runs_inserted, second.backtests_inserted) == (2, 0, 0)
+    points = tenant_db.execute("select count(*) from forecast_point").fetchone()[0]
+    benchmark = tenant_db.execute(
+        "select min(mae_vs_naive), max(mae_vs_naive) from backtest_result where model_code = 'naive'"
+    ).fetchone()
+    assert points == 12 and benchmark == (Decimal("1.000000"), Decimal("1.000000"))
+
+
+def test_pending_sync_requests_are_fetched_once_and_closed(tenant_db, monkeypatch):
+    import contextlib
+    import types
+
+    from fxworkers.rates import requests as req
+    from fxworkers.rates.raw_store import RawObject
+
+    tenant = types.SimpleNamespace(slug="t1", status="active")
+    for start in ("2026-11-01", None):
+        tenant_db.execute("insert into sync_request (source_code, range_from, requested_by) values ('banxico_fix', %s, 'test')",
+                          (start,))
+    tenant_db.commit()
+
+    calls = []
+    monkeypatch.setattr(req, "list_tenants", lambda cp: [tenant])
+    monkeypatch.setattr(req, "connect_tenant", lambda cp, t: contextlib.nullcontext(tenant_db))
+    monkeypatch.setattr(req, "fetch_to_store", lambda store, src, a, b: calls.append((a, b)) or RawObject("raw/k", "f" * 64, b""))
+    monkeypatch.setattr(req, "load_from_store", lambda cp, store, src, key, ts: print("t1: seen 5, inserted 1") or 0)
+
+    assert req.process_pending(None, None, today=dt.date(2026, 11, 10)) == 2
+    assert calls == [(dt.date(2026, 10, 11), dt.date(2026, 11, 10))]  # one fetch for the union of both ranges
+    rows = tenant_db.execute("select status, result from sync_request order by id").fetchall()
+    assert rows == [("done", "2026-10-11–2026-11-10: seen 5, inserted 1")] * 2
+    assert req.process_pending(None, None, today=dt.date(2026, 11, 10)) == 0
+
+
+def test_news_sync_fetches_once_within_the_plan_and_reads_back_from_the_database(tenant_db, monkeypatch):
+    import contextlib
+    import types
+
+    from fxworkers.news import gnews, sync as news_sync
+    from fxworkers.rates.raw_store import LocalRawStore
+
+    # Rates with two big jumps: one 20 days ago (inside a 30-day plan) and one 90 days ago (outside).
+    today = dt.date(2026, 11, 11)
+    day, rows, i = today - dt.timedelta(days=200), [], 0
+    while day <= today:
+        if day.weekday() < 5:
+            i += 1
+            rate = 18.0 + 0.01 * (i % 3)
+            if day in (today - dt.timedelta(days=20), today - dt.timedelta(days=90)):
+                rate *= 1.025
+            rows.append(Observation(day, Decimal(str(round(rate, 4)))))
+        day += dt.timedelta(days=1)
+    load_observations(tenant_db, "banxico_fix", "raw/n.json", "d" * 64, rows)
+
+    calls = []
+
+    class FakeClient:
+        requests = 0
+
+        def search(self, lang, start, end, max_articles):
+            calls.append((lang, start.date()))
+            FakeClient.requests += 1
+            return json.dumps({"articles": [{"title": f"Titular {lang} {start.date()}", "url": f"https://x.mx/{lang}/{start.date()}",
+                                             "publishedAt": end.astimezone(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
+                                             "lang": lang, "source": {"name": "Diario"}}]}).encode()
+
+    tenant = types.SimpleNamespace(slug="t1", status="active")
+    monkeypatch.setattr(news_sync, "connect_tenant", lambda cp, t: contextlib.nullcontext(tenant_db))
+    plan = gnews.Plan(history_days=30, delay_hours=12, max_articles=10)
+    now = dt.datetime(2026, 11, 11, 20, 0, tzinfo=dt.timezone.utc)
+    store = LocalRawStore(__import__("pathlib").Path(__import__("tempfile").mkdtemp()))
+
+    stats = news_sync.sync(None, store, [tenant], FakeClient(), plan, now)
+    windows = dict(tenant_db.execute("select window_key, article_count from news_window").fetchall())
+    flagged = tenant_db.execute("select count(*) from rate_move").fetchone()[0]
+    assert flagged >= 2
+    recent = tenant_db.execute("select count(*) from rate_move where rate_date >= %s", (today - dt.timedelta(days=30),)).fetchone()[0]
+    assert recent >= 1
+    assert stats["windows_fetched"] == 1 + recent and len(calls) == 2 * (1 + recent)  # today + recent moves, 2 langs
+    assert any(k.startswith("move:") for k in windows) and "today:2026-11-11" in windows
+    assert not any(k == f"move:{(today - dt.timedelta(days=90)).isoformat()}" for k in windows)  # outside the plan
+
+    calls.clear()
+    news_sync.sync(None, store, [tenant], FakeClient(), plan, now + dt.timedelta(hours=1))
+    assert calls == []  # nothing new: the move is stored and today's headlines are fresh

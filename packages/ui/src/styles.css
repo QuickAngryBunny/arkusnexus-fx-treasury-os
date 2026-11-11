@@ -118,6 +118,11 @@ a.vi-stat:hover { background: var(--vi-selected); }
 .vi-stat__note--positive { color: var(--vi-green-ink); }
 .vi-stat__note--negative { color: var(--vi-orange-ink); }
 .vi-stat__note--neutral { color: var(--vi-muted); }
+.vi-stat__label--kicker { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+.vi-stat__value--icon { display: inline-flex; align-items: center; gap: 8px; }
+.vi-stat__value--positive { color: var(--vi-green-ink); }
+.vi-stat__value--negative { color: var(--vi-orange-ink); }
+.vi-stat__value--brand { color: var(--vi-violet-ink); }
 
 /* ── AlertBanner ────────────────────────────────────────── */
 .vi-banner {
@@ -246,12 +251,63 @@ a.vi-stat:hover { background: var(--vi-selected); }
 .vi-menu__section { padding: 8px 12px 4px; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--vi-muted); }
 .vi-menu__divider { height: 1px; background: var(--vi-line); margin: 4px 8px; border: 0; }
 
-/* Narrow screens: the sidebar becomes a top bar with scrolling items. */
+.vi-nav__short { display: none; }
+
+/* Narrow screens: top bar (brand + user menu) and a fixed bottom tab bar for the sections. */
 @media (max-width: 900px) {
-  .vi-nav { height: auto; padding: 12px 16px; gap: 12px; border-radius: 0 0 var(--vi-radius-panel) var(--vi-radius-panel); }
-  .vi-nav__items { flex-direction: row; overflow-x: auto; scrollbar-width: none; }
-  .vi-nav__item { white-space: nowrap; }
-  .vi-nav__footer { margin-top: 0; }
+  .vi-nav {
+    height: auto; padding: 12px 16px; border-radius: 0 0 var(--vi-radius-panel) var(--vi-radius-panel);
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px 12px;
+  }
+  .vi-nav__brand { padding: 0; }
+  .vi-nav__footer { display: contents; }
+  .vi-nav__footer > * { grid-column: 1 / -1; }
   .vi-nav__card { display: none; }
-  .vi-user__panel { bottom: auto; top: calc(100% + 8px); }
+
+  /* User menu: avatar + chevron at the top right; same menu panel, opening downwards. */
+  .vi-nav__footer > .vi-user { grid-column: 2; grid-row: 1; }
+  .vi-user__trigger { width: auto; padding: 4px 8px 4px 4px; border-radius: var(--vi-radius-pill); gap: 6px; min-height: var(--vi-tap); }
+  .vi-user__id { display: none; }
+  .vi-user__chev { transform: rotate(90deg); }
+  .vi-user__trigger[aria-expanded="true"] .vi-user__chev { transform: rotate(-90deg); }
+  .vi-user__panel { bottom: auto; top: calc(100% + 8px); left: auto; right: 0; width: min(300px, calc(100vw - 32px)); }
+
+  /* Sections: bottom tab bar with icon over a short label. */
+  .vi-nav__items {
+    position: fixed; z-index: 40; left: 0; right: 0; bottom: 0; flex-direction: row; gap: 0;
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); background: var(--vi-white);
+    border-top: 1px solid var(--vi-line); box-shadow: 0 -8px 24px rgb(36 21 47 / 8%);
+  }
+  .vi-nav__items > li { flex: 1 1 0; min-width: 0; }
+  .vi-nav__item {
+    flex-direction: column; justify-content: center; gap: 3px; min-height: 52px; padding: 4px 2px;
+    border-radius: var(--vi-radius-md); font-size: 11px; font-weight: 700; text-align: center;
+  }
+  .vi-nav__item:hover { background: transparent; }
+  .vi-nav__item[aria-current="page"] { background: transparent; color: var(--vi-violet); }
+  .vi-nav__item[aria-current="page"] svg { background: var(--vi-mist); border-radius: var(--vi-radius-pill); box-sizing: content-box; padding: 3px 14px; }
+  /* Full name stays for screen readers; the short label is what sighted users see. */
+  .vi-nav__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .vi-nav__short { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
+
+/* ── HeroCard ───────────────────────────────────────────── */
+.vi-hero {
+  position: relative; overflow: hidden; box-sizing: border-box; min-height: 168px; border-radius: var(--vi-radius-panel);
+  font-family: var(--vi-font); color: var(--vi-white);
+}
+.vi-hero--violet { background: var(--vi-violet); }
+.vi-hero--plum { background: var(--vi-plum); }
+.vi-hero__blob { position: absolute; border-radius: 50%; pointer-events: none; }
+.vi-hero__blob--a { width: 240px; height: 240px; background: var(--vi-plum); left: 90px; top: 50px; }
+.vi-hero__blob--b { width: 160px; height: 160px; background: var(--vi-lavender); right: -50px; top: -60px; }
+.vi-hero__body {
+  position: relative; box-sizing: border-box; height: 100%; padding: 18px 20px; display: flex; flex-direction: column; gap: 4px;
+}
+.vi-hero__kicker { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+.vi-hero--violet .vi-hero__kicker, .vi-hero--violet .vi-hero__note { color: var(--vi-on-violet); }
+.vi-hero--plum .vi-hero__kicker, .vi-hero--plum .vi-hero__note { color: var(--vi-on-plum); }
+.vi-hero__value { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.vi-hero--violet .vi-hero__value { margin-top: auto; font-size: 46px; letter-spacing: -0.03em; line-height: 1; }
+.vi-hero__note { font-size: 13px; line-height: 1.45; }
+.vi-hero a { color: var(--vi-white); font-weight: 700; font-size: 13px; }

@@ -2,7 +2,14 @@ import type { ReactNode } from "react";
 import { BrandMark, StrokeIcon, navIcons, type NavIcon } from "./icons";
 import { cx, type LinkComponent } from "./util";
 
-export type AppNavItem = { key: string; label: ReactNode; href: string; icon: NavIcon };
+export type AppNavItem = {
+  key: string;
+  label: ReactNode;
+  /** Shown in the bottom tab bar on narrow screens (falls back to `label`). */
+  shortLabel?: ReactNode;
+  href: string;
+  icon: NavIcon;
+};
 
 export type AppNavProps = {
   items: ReadonlyArray<AppNavItem>;
@@ -19,7 +26,11 @@ export type AppNavProps = {
   className?: string;
 };
 
-/** Shared sidebar: brand, main sections, optional progress card, user menu. A top bar on narrow screens. */
+/**
+ * Shared sidebar: brand, main sections, optional progress card, user menu.
+ * Narrow screens (≤ 900px): a top bar with the brand and the user menu (avatar + chevron), anything else from the
+ * footer in a row below it, and the sections as a fixed bottom tab bar with short labels.
+ */
 export function AppNav({ items, active, brand, label = "Primary", card, user, linkAs: Link = "a", className }: AppNavProps) {
   return (
     <nav aria-label={label} className={cx("vi-nav", className)}>
@@ -34,9 +45,15 @@ export function AppNav({ items, active, brand, label = "Primary", card, user, li
       <ul className="vi-nav__items">
         {items.map((it) => (
           <li key={it.key}>
-            <Link href={it.href} className="vi-nav__item" aria-current={it.key === active ? "page" : undefined}>
+            <Link
+              href={it.href}
+              className="vi-nav__item"
+              aria-current={it.key === active ? "page" : undefined}
+              aria-label={typeof it.label === "string" ? it.label : undefined}
+            >
               <StrokeIcon d={navIcons[it.icon]} />
-              {it.label}
+              <span className="vi-nav__label">{it.label}</span>
+              <span className="vi-nav__short" aria-hidden="true">{it.shortLabel ?? it.label}</span>
             </Link>
           </li>
         ))}

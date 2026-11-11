@@ -4,6 +4,7 @@ export { Field, SelectField, type FieldProps, type SelectFieldProps } from "./Fi
 export { Switch, type SwitchProps } from "./Switch";
 export { Segmented, type SegmentedOption, type SegmentedProps } from "./Segmented";
 export { StatCard, type StatCardProps, type StatTone } from "./StatCard";
+export { HeroCard, type HeroCardProps } from "./HeroCard";
 export { AlertBanner, type AlertBannerProps, type AlertTone } from "./AlertBanner";
 export { PageHeader, type PageHeaderProps } from "./PageHeader";
 export { Breadcrumb, type BreadcrumbProps, type Crumb } from "./Breadcrumb";

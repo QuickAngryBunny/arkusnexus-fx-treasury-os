@@ -21,12 +21,22 @@ mkdir -p .logs
 echo "Starting API on http://localhost:5080 (log: .logs/api.log)"
 dotnet run --project src/FxOs.Api > .logs/api.log 2>&1 &
 API_PID=$!
-trap 'echo; echo "Stopping API…"; kill $API_PID 2>/dev/null || true' EXIT INT TERM
+SCHED_PID=""
+trap 'echo; echo "Stopping API and rate scheduler…"; kill $API_PID $SCHED_PID 2>/dev/null || true' EXIT INT TERM
 
 until curl -sf http://localhost:5080/health >/dev/null; do
   if ! kill -0 $API_PID 2>/dev/null; then echo "API failed to start — see .logs/api.log"; exit 1; fi
   sleep 1
 done
+
+# Daily Banxico sync (and forecast refresh) when the worker is installed and a token is configured.
+if [ -x workers/python/.venv/bin/fxworkers ] && grep -q '^BANXICO_TOKEN=.' workers/python/.env 2>/dev/null; then
+  echo "Starting rate scheduler (log: .logs/rates.log)"
+  workers/python/.venv/bin/fxworkers rates schedule > .logs/rates.log 2>&1 &
+  SCHED_PID=$!
+else
+  echo "Rate scheduler not started: install workers/python (.venv) and set BANXICO_TOKEN in workers/python/.env"
+fi
 
 echo "Starting web on http://localhost:3000"
 pnpm dev:web
