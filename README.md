@@ -1,11 +1,13 @@
 # FX Intelligence & Treasury OS
 
-Enterprise financial intelligence platform that combines historical currency data, predictive modeling, treasury
-management, cash flow forecasting, profitability analysis and AI-powered financial decision support.
-Built first for Arkus Nexus (USD/MXN), later as multi-tenant SaaS.
+USD/MXN exchange-rate intelligence: rate history, forecasts and news (Phases 0–2), accounts and team (Phase 3),
+conversion plans as the main action (Phase 4) and an AI assistant (Phase 5). Built first for Arkus Nexus, later as
+multi-tenant SaaS. Treasury, exposure, cash flow, simulator, profitability, billing, self-serve sign-up and two-step
+verification are out of scope ([Phase 3 brief](docs/phase-3-brief.md)).
 
-> **Phase 0 — internal only.** Dummy tenants and dummy data, no sign-in. The API refuses to start outside the
-> `Development`, `Testing` and `Internal` environments. Sign-in and MFA arrive in Phase 3, before any real data.
+> **Internal only until Phase 3.** Dummy tenants and dummy data, no sign-in. The API refuses to start outside the
+> `Development`, `Testing` and `Internal` environments. Phase 3 adds the app's own email-and-password sign-in (no MFA,
+> no outside identity provider) behind the private network, before any real data.
 
 ## Architecture in one paragraph
 
@@ -42,7 +44,7 @@ dotnet run --project src/FxOs.Migrator -- provision demo_bajio "Demo Bajío"
 # 3. Worker install (rates and forecasts need workers/python/.env with BANXICO_TOKEN; see .env.example)
 cd workers/python && python3 -m venv .venv && .venv/bin/pip install -e ".[dev]" && cd ../..
 
-# 3b. Real rates first (dummy conversions use the FIX), then dummy company + treasury data, then forecasts
+# 3b. Real rates, interest-rate curves, dummy users, then forecasts
 cd workers/python && .venv/bin/fxworkers rates backfill && .venv/bin/fxworkers curves backfill \
   && .venv/bin/fxworkers seed --all-dummy && .venv/bin/fxworkers forecast run && cd ../..
 
@@ -64,7 +66,7 @@ Try the API directly:
 
 ```bash
 curl -H "X-Tenant: demo_norte" http://localhost:5080/api/tenant/profile
-curl -H "X-Tenant: demo_bajio" http://localhost:5080/api/tenant/departments
+curl -H "X-Tenant: demo_bajio" http://localhost:5080/api/tenant/users
 ```
 
 ## Exchange rates (Phase 1)
@@ -97,15 +99,11 @@ fxworkers rates requests                    # process pending "Sync now" / "Re-f
   `/api/tenant/rates/{source}?from=YYYY-MM-DD&to=YYYY-MM-DD` (default: 90 days to the latest rate).
 - The token lives only in `workers/python/.env` (git-ignored); it is sent as the `Bmx-Token` header, never stored.
 
-## Dummy treasury data (Phases 0–2)
+## Dummy data (Phases 0–2)
 
-`fxworkers seed --all-dummy` also writes three connected dummy bank accounts per tenant (US LLC operating USD,
-Mexican S.A. operating MXN, Mexican S.A. USD) and their movements since 2025-01-01: US client collections, a monthly
-intercompany transfer to Mexico, MXN payroll (with December aguinaldo), IMSS, SAT, rent and utilities, local MXN
-clients, and a monthly USD→MXN conversion at the stored FIX minus a bank spread. Both conversion legs keep their
-original amount and the applied rate, its source and time. Values are deterministic per day, so a later run only adds
-new days. API: `/api/tenant/bank-accounts`, `/api/tenant/transactions`, `/api/tenant/cash-flow/monthly` (intercompany
-and conversions reported as transfers, not income or expense).
+`fxworkers seed --all-dummy` writes deterministic dummy users (`.example` emails) into every active dummy tenant.
+It refuses any tenant not flagged `is_dummy`. Treasury data (bank accounts, transactions, legal entities, departments)
+was removed in tenant migration V0008 when the product narrowed to exchange rates and conversion plans.
 
 ## Forecasts (Phase 2)
 

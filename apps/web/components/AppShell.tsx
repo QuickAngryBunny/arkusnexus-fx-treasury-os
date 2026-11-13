@@ -6,7 +6,7 @@ import { TenantSwitcher } from "@/components/TenantSwitcher";
 import { LOCALES } from "@/lib/i18n";
 import { getSession } from "@/lib/session";
 
-export type Section = "dashboard" | "forecast" | "treasury" | "exposure" | "simulator";
+export type Section = "dashboard" | "forecast";
 
 /** App frame for every signed-in screen: sidebar (AppNav + user menu), developer bar, main content. */
 export async function AppShell({ active, children }: { active?: Section; children: ReactNode }) {
@@ -15,9 +15,6 @@ export async function AppShell({ active, children }: { active?: Section; childre
   const items: AppNavItem[] = [
     { key: "dashboard", label: t("nav.dashboard"), shortLabel: t("nav.short.dashboard"), href: "/", icon: "dashboard" },
     { key: "forecast", label: t("nav.forecast"), shortLabel: t("nav.short.forecast"), href: "/forecast", icon: "forecast" },
-    { key: "treasury", label: t("nav.treasury"), shortLabel: t("nav.short.treasury"), href: "/treasury", icon: "treasury" },
-    { key: "exposure", label: t("nav.exposure"), shortLabel: t("nav.short.exposure"), href: "/exposure", icon: "exposure" },
-    { key: "simulator", label: t("nav.simulator"), shortLabel: t("nav.short.simulator"), href: "/simulator", icon: "simulator" },
   ];
 
   const name = viewer?.displayName ?? t("user.devViewer");

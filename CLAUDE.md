@@ -3,21 +3,36 @@
 Read this first. It holds the decisions and conventions agreed so far; the README has run commands.
 
 ## Product
-Enterprise FX and treasury platform. Built first for Arkus Nexus (USD/MXN exposure), later multi-tenant SaaS.
-- PRD: project doc "FX intelligence 1.docx" (modules 01–11, phases 1–6).
+USD/MXN exchange-rate platform. Built first for Arkus Nexus, later multi-tenant SaaS.
+Scope (narrowed, see `docs/phase-3-brief.md`): rate history and forecast + news (Phases 0–2), accounts/team/tenant admin
+(Phase 3), conversion plans as the main action (Phase 4), AI assistant (Phase 5). **Out of scope — don't build or
+scaffold:** treasury, currency exposure, cash flow, simulator, profitability, billing/subscriptions, self-serve sign-up,
+MFA/two-step verification.
+- PRD: project doc "FX intelligence 1.docx" (modules 01–11; narrowed by the Phase 3 brief).
 - Build plan (phases 0–6, sprints, exit criteria): https://claude.ai/artifact/UvdTvey4XkCdchDU65Mat4
-- Design canvas / prototype (screen reference, Violeta components page): https://claude.ai/code/artifact/f8510a18-6085-4aa2-bb6b-6226f7065c56
+- Design canvas with user journeys + clickable prototype (screen codes O-*, T-*, A-*, U-*, C-*): https://claude.ai/artifact/XfTxqdpgPriSXYT9Du7MHw
+- Earlier design canvas (R-*, P*-* artboards, Violeta components page): https://claude.ai/code/artifact/f8510a18-6085-4aa2-bb6b-6226f7065c56
+- Architecture whiteboard: https://claude.ai/artifact/GSGKEGsD7SZZXirjqLFeTw
 - One developer, one-week sprints.
 
 ## Rollout rules (do not break)
 - Phases 0–2: internal environment only, dummy tenants and dummy company data. Only public exchange rates are real.
-- Phase 3 adds sign-up, sign-in and MFA, then Arkus Nexus loads real data. Nothing real before that passes.
-- Phase 6: billing/subscriptions and other companies. Two roles only: `standard` and `admin`; only admins manage billing.
-- Rate alerts (threshold email) ship in Phase 2; AI-driven alerts in Phase 5. LLM: Azure OpenAI, GPT‑6.1 Terra (Phase 5).
+- Development runs locally until the last phase; the DevOps developer then deploys to Azure. Don't build Azure infra
+  (private network, Key Vault provisioning, backups, deploy workflows); keep seams like `ISecretStore` for them.
+- Phase 3 gate (private network only, backups, encryption, Key Vault, restore drill, security review) is part of that
+  hand-off. Sign-in is the app's own email + password (Argon2id/bcrypt hash in the control plane, HTTP-only session
+  cookies, 15-minute lock). No MFA, no outside identity provider. Tenants are created by internal tenant admins (no self-serve sign-up).
+  Arkus Nexus loads real data only after the gate passes.
+- Roles per tenant membership: `admin`, `approver`, `standard`. Only admins see Team, invite, change roles, edit banks.
+- Email: Firebase is only the sender (Trigger Email extension, Firestore `mail` collection). Firebase does no auth and
+  holds no user data. Locally the API writes to the real Firebase project (test addresses only); the service-account
+  key stays outside the repo (Key Vault after the hand-off).
+- Alerts belong to conversion plans (Phase 4); AI in Phase 5. LLM: Azure OpenAI, GPT‑6.1 Terra (Phase 5).
 
 ## Architecture (ADR 0001: docs/decisions/0001-database-per-tenant.md)
 - One PostgreSQL + TimescaleDB database and login role per tenant, including its own copy of rate history.
-  Control plane (`fx_control`) holds only tenants, routing, schema version (identities/subscriptions later).
+  Control plane (`fx_control`) holds only tenants, routing, schema version, and (Phase 3) identities, memberships,
+  invitations, password resets and sessions. Store only token hashes, never raw tokens.
 - Web (Next.js) → .NET 10 API only; the browser never calls the API directly (server components/actions).
 - User-facing queries never call external data APIs; only ingestion workers do (Phase 1, raw store in Blob, per-tenant fan-out).
 - Financial calculations are deterministic services; the LLM never computes money values.
@@ -53,30 +68,27 @@ Enterprise FX and treasury platform. Built first for Arkus Nexus (USD/MXN exposu
   `/api/tenant/rates/*`. Banxico token: `workers/python/.env` only (`BANXICO_TOKEN`), never committed or logged.
   Still to do: DOF connector, per-tenant source/recurrence settings, versioned manual value corrections, export
   drawer (P2-06), source-down state (P2-S1).
-- Phase 2 (started): V0003 treasury foundation (bank_account, financial_transaction with conversion legs) seeded with
-  dummy data by `fxworkers seed`; V0004 forecasting (model registry, runs, points with 80/95% intervals, backtests);
+- Phase 2: V0004 forecasting (model registry, runs, points with 80/95% intervals, backtests);
   V0005 interest-rate curves (TIIE + US Treasury, `fxworkers curves sync|backfill`) and model display order; models
-  `forward` (interest-rate parity), `ewma_vol`, `naive`; `fxworkers forecast run`; APIs for bank accounts, transactions, monthly cash flow, analytics, forecasts; dashboard
-  cash by currency + accounts; Exchange Forecast follows R-01 (today hero card, trend, 30D volatility level, plum
+  `forward` (interest-rate parity), `ewma_vol`, `naive`; `fxworkers forecast run`; APIs for analytics and forecasts; Exchange Forecast follows R-01 (today hero card, trend, 30D volatility level, plum
   forecast card + 12-month chart with 7D–180D horizon pills, biggest one-day move, rate-gap driver) and
   `/forecast/models` follows P4-04 (leaderboard vs naive per horizon). Build screens from the design canvas artboards
   (R-*, P*-*, J*), not from scratch; "Alert me" (P2-04) stays disabled until built. `/forecast/history` follows R-02:
   year/month/day views (URL-driven), gaps from a deterministic Mexican bank-holiday calendar (`MexicanBankCalendar`),
   "Mark holiday" (V0006 `rate_gap_resolution`, audited), "Re-fetch"/"Sync now" record a `sync_request` that the
   worker's scheduler processes every minute (fetch once, load every tenant), CSV export of the shown view.
-  Dashboard follows P8-01/P8-02: `GET /api/tenant/dashboard?period&currencies&customer&entity` computes cash (USD equiv.
-  at today's FIX), USD exposure in MXN entities, period flows at the period's average FIX, a 90-day peso projection
-  (same weeks last year, reserve = one month of peso costs) and a recommendation priced with the forward model; the
-  rate card reuses the Exchange Forecast data. Filters drawer is a GET form (URL state).
+  Dashboard: greeting + today's rate card (reuses the Exchange Forecast data); O-05 adds the rest in Phase 3.
   News (V0007 `rate_move`, `news_window`, `news_article`): `fxworkers news sync` flags moves beyond ±2σ of the previous
   30 days, fetches GNews once per window into the raw store and copies into every tenant; `GET /api/tenant/news` reads
   the tenant DB only. R-01 shows move markers, a Today button and the News card. `GNEWS_API_KEY` in
   `workers/python/.env` only; free plan = last 30 days, 12 h delay, 100 req/day (set `GNEWS_PLAN=paid` to widen).
-  Treasury screens and real bank feeds stay in Phase 3. Next in Phase 2: rate alerts with email (P2-04, P2-S2),
-  economic indicators/events and "why it moved", driver-based models, R-01 chart with horizon filter and event
-  markers, the dashboard convert-or-wait signal.
+  Still open from Phase 2: economic indicators/events and "why it moved", driver-based models, R-01 chart with
+  horizon filter and event markers.
+- Phase 3 (started, brief: `docs/phase-3-brief.md`): V0008 dropped the treasury scaffolding (bank_account,
+  financial_transaction, legal_entity, department; dashboard cash/exposure/projection; /treasury, /exposure,
+  /simulator). `fxworkers seed` now writes dummy users only. Dev tenant switcher stays until sign-in (Sprint 2).
 - Forecast rule: publish every model's backtest next to the naive benchmark; do not present a model as better than
   naive unless `mae_vs_naive` < 1 for that horizon.
-- Phase 0 sprint 3 (still open): Azure internal environment, deploy workflow running per-tenant migrations, OpenTelemetry (tenant id
-  tag), Grafana, split migration-owner vs app role.
+- Phase 0 sprint 3 (moved to the DevOps hand-off): Azure internal environment, deploy workflow running per-tenant
+  migrations, OpenTelemetry (tenant id tag), Grafana. Split migration-owner vs app role is still ours, before real data.
 - Housekeeping: ~50 analyzer warnings to clear before `TreatWarningsAsErrors`.

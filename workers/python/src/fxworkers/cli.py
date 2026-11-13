@@ -1,6 +1,6 @@
 """Command line entry point.
 
-    fxworkers seed --tenant demo_norte      seed one dummy tenant
+    fxworkers seed --tenant demo_norte      seed dummy users into one dummy tenant
     fxworkers seed --all-dummy              seed every active dummy tenant
     fxworkers rates sync                    fetch the last 30 days of each source, load every tenant
     fxworkers rates backfill                fetch each source's full history, load every tenant
@@ -22,11 +22,8 @@ def _seed(args: argparse.Namespace) -> int:
     import psycopg
 
     from .control_plane import connect_tenant, control_plane_dsn, find_tenant, list_tenants
-    import datetime as dt
-
     from .dummy_data import build_dataset
-    from .dummy_treasury import build_treasury
-    from .seed import fix_lookup, seed_tenant, seed_treasury
+    from .seed import seed_tenant
 
     with psycopg.connect(control_plane_dsn()) as cp:
         if args.all_dummy:
@@ -43,12 +40,9 @@ def _seed(args: argparse.Namespace) -> int:
             return 1
 
         for tenant in tenants:
-            dataset = build_dataset(tenant.slug, tenant.display_name, user_count=args.users)
+            dataset = build_dataset(tenant.slug, user_count=args.users)
             with connect_tenant(cp, tenant) as conn:
                 inserted = seed_tenant(conn, tenant, dataset)
-                if args.treasury:
-                    data = build_treasury(tenant.slug, until=dt.date.today(), rate_on=fix_lookup(conn))
-                    inserted |= seed_treasury(conn, tenant, data)
             print(f"{tenant.slug}: inserted {inserted}")
     return 0
 
@@ -240,13 +234,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="fxworkers")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    seed = sub.add_parser("seed", help="Seed dummy company data into dummy tenants")
+    seed = sub.add_parser("seed", help="Seed dummy users into dummy tenants")
     target = seed.add_mutually_exclusive_group(required=True)
     target.add_argument("--tenant", help="Tenant slug")
     target.add_argument("--all-dummy", action="store_true", help="Every active dummy tenant")
     seed.add_argument("--users", type=int, default=10, help="Users per tenant (default 10)")
-    seed.add_argument("--no-treasury", dest="treasury", action="store_false",
-                      help="Skip dummy bank accounts and income/expense movements")
     seed.set_defaults(func=_seed)
 
     rates = sub.add_parser("rates", help="Exchange-rate ingestion")

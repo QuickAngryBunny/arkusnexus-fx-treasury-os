@@ -16,6 +16,8 @@ namespace FxOs.Api.Tests;
 [Collection(PlatformCollection.Name)]
 public sealed class TenantIsolationTests(PlatformFixture fx)
 {
+    private const string SyncRequests = "/api/tenant/rates/banxico_fix/sync-requests";
+
     [Fact]
     public async Task Each_tenant_gets_its_own_database_and_login()
     {
@@ -36,16 +38,12 @@ public sealed class TenantIsolationTests(PlatformFixture fx)
         var b = await fx.ProvisionAsync("iso");
         var client = fx.Client();
 
-        var createA = await client.SendAsync(PlatformFixture.Request(HttpMethod.Post, "/api/tenant/departments", a.Slug, new { name = "Tesorería A" }));
-        var createB = await client.SendAsync(PlatformFixture.Request(HttpMethod.Post, "/api/tenant/departments", b.Slug, new { name = "Operaciones B" }));
-        Assert.Equal(HttpStatusCode.Created, createA.StatusCode);
-        Assert.Equal(HttpStatusCode.Created, createB.StatusCode);
+        // A write in tenant A (audited in the same transaction) must not show up in tenant B.
+        var created = await client.SendAsync(PlatformFixture.Request(HttpMethod.Post, SyncRequests, a.Slug, new { }));
+        Assert.Equal(HttpStatusCode.Accepted, created.StatusCode);
 
-        var namesA = await DepartmentNamesAsync(client, a.Slug);
-        var namesB = await DepartmentNamesAsync(client, b.Slug);
-
-        Assert.Equal(new[] { "Tesorería A" }, namesA);
-        Assert.Equal(new[] { "Operaciones B" }, namesB);
+        Assert.Contains("rates.sync_requested", await AuditActionsAsync(client, a.Slug));
+        Assert.DoesNotContain("rates.sync_requested", await AuditActionsAsync(client, b.Slug));
 
         var profileA = await client.SendAsync(PlatformFixture.Request(HttpMethod.Get, "/api/tenant/profile", a.Slug));
         var profile = await profileA.Content.ReadFromJsonAsync<JsonElement>();
@@ -126,11 +124,11 @@ public sealed class TenantIsolationTests(PlatformFixture fx)
         Assert.Equal(HttpStatusCode.BadRequest, malformed.StatusCode);
     }
 
-    private static async Task<string[]> DepartmentNamesAsync(HttpClient client, string tenant)
+    private static async Task<string[]> AuditActionsAsync(HttpClient client, string tenant)
     {
-        var response = await client.SendAsync(PlatformFixture.Request(HttpMethod.Get, "/api/tenant/departments", tenant));
+        var response = await client.SendAsync(PlatformFixture.Request(HttpMethod.Get, "/api/tenant/audit", tenant));
         response.EnsureSuccessStatusCode();
         var rows = await response.Content.ReadFromJsonAsync<JsonElement>();
-        return rows.EnumerateArray().Select(r => r.GetProperty("name").GetString()!).ToArray();
+        return rows.EnumerateArray().Select(r => r.GetProperty("action").GetString()!).ToArray();
     }
 }

@@ -2,9 +2,6 @@
 export const navIcons = {
   dashboard: "M4 4h7v9H4zM13 4h7v5h-7zM13 11h7v9h-7zM4 15h7v5H4z",
   forecast: "M3 20h18M4 16l4-5 4 3 4-5M18 3l.9 2.1L21 6l-2.1.9L18 9l-.9-2.1L15 6l2.1-.9z",
-  treasury: "M3 8h15a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3zM3 8l12-4v4M16 14h1",
-  exposure: "M7 7h13l-3-3M17 17H4l3 3",
-  simulator: "M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4",
 } as const;
 
 export type NavIcon = keyof typeof navIcons;

@@ -64,9 +64,9 @@ export default async function ComponentsPage() {
           <div className="grid">
             <Field label={t("ui.rate")} hint={t("ui.rateHint")} defaultValue="18.4215" inputMode="decimal" />
             <Field label={t("ui.rate")} emphasis defaultValue="18.4215" inputMode="decimal" />
-            <SelectField label={t("ui.entity")} defaultValue="mx">
-              <option value="mx">Demo Norte S.A. de C.V.</option>
-              <option value="us">Demo Norte Inc.</option>
+            <SelectField label={t("ui.bank")} defaultValue="mxn">
+              <option value="mxn">Banco Ficticio del Norte · MXN</option>
+              <option value="usd">Dummy Bank USA · USD</option>
             </SelectField>
           </div>
           <UiDemoControls

@@ -55,13 +55,11 @@ export type TenantProfile = {
   baseCurrency: string;
   locale: "es-MX" | "en-US";
   timeZone: string;
-  counts: { legalEntities: number; departments: number; users: number };
+  counts: { users: number };
 };
 
-export type LegalEntity = { id: string; name: string; taxId: string | null; country: string; functionalCurrency: string };
-export type Department = { id: string; name: string; legalEntityId: string | null; legalEntityName: string | null };
 export type AuditEvent = { id: number; occurredAt: string; actor: string; action: string; entityType: string | null; entityId: string | null };
-export type TenantUser = { id: string; email: string; displayName: string; role: "standard" | "admin"; departmentName: string | null };
+export type TenantUser = { id: string; email: string; displayName: string; role: "standard" | "admin" };
 
 export type RateSource = {
   code: string;
@@ -97,30 +95,6 @@ export type RateHistory = {
   from: string;
   to: string;
   points: { date: string; rate: number }[];
-};
-
-export type BankAccount = {
-  id: string;
-  legalEntityId: string;
-  legalEntityName: string;
-  bankName: string;
-  accountName: string;
-  accountLast4: string;
-  currency: string;
-  kind: "operating" | "payroll" | "savings";
-  feed: { provider: string | null; status: "connected" | "needs_attention" | "disconnected"; lastSyncedAt: string | null };
-  balance: number;
-  lastBookedOn: string | null;
-};
-
-export type MonthlyCashFlow = {
-  month: string;
-  currency: string;
-  income: number;
-  expense: number;
-  net: number;
-  transfersIn: number;
-  transfersOut: number;
 };
 
 export type RateAnalytics = {
@@ -199,20 +173,6 @@ export type HistoryDay = {
   changePct: number | null;
   resolution: { resolution: string; note: string | null; resolvedBy: string; resolvedAt: string } | null;
   versions: { at: string; actor: string; oldRate: string | null; newRate: string | null; rawRef: string | null }[];
-};
-
-export type Dashboard = {
-  asOf: string;
-  fix: { date: string; rate: number; source: string };
-  filters: { period: "month" | "quarter" | "12m"; currencies: string[]; customer: string | null; entity: string | null };
-  cash: { byCurrency: { currency: string; balance: number }[]; totalUsd: number; prevMonthEnd: string; changePct: number | null };
-  exposure: { usdLong: number; hedgedPct: number };
-  flows: { from: string; to: string; fix: number; revenueUsd: number; expensesUsd: number | null; marginPct: number | null; customerSharePct: number | null };
-  pesoProjection: { reserveMxn: number; method: string; steps: { date: string; balance: number; kind: "actual" | "estimated"; belowReserve: boolean }[] } | null;
-  recommendation:
-    | { kind: "liquidity"; date: string; shortfallMxn: number; usdToConvert: number; rate: number; rateSource: string }
-    | { kind: "exposure" | "none"; exposureUsd: number; mxnAtFix: number; horizon: number | null; mxnLow80: number | null; mxnHigh80: number | null };
-  options: { customers: string[]; entities: { id: string; name: string }[]; currencies: string[] };
 };
 
 export type NewsFeed = {
