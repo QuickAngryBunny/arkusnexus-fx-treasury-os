@@ -12,3 +12,8 @@ export { AppNav, type AppNavItem, type AppNavProps } from "./AppNav";
 export { UserMenu, MenuItem, MenuSection, MenuDivider, type UserMenuProps } from "./UserMenu";
 export { BrandMark, StrokeIcon, navIcons, type NavIcon } from "./icons";
 export { cx, initials, type LinkComponent } from "./util";
+export {
+  AuthShell, AuthHeading, Notice, StatusTile, Checkbox, PasswordRules,
+  type AuthShellProps, type NoticeTone, type StatusTileKind, type CheckboxProps, type PasswordRule,
+} from "./Auth";
+export { PasswordField, type PasswordFieldProps } from "./PasswordField";

@@ -9,7 +9,9 @@
 .vi-nav a:focus-visible,
 .vi-nav button:focus-visible,
 .vi-stat:focus-visible,
-.vi-banner__action:focus-visible {
+.vi-banner__action:focus-visible,
+.vi-password__toggle:focus-visible,
+.vi-check input:focus-visible {
   outline: none;
   box-shadow: var(--vi-focus);
 }
@@ -311,3 +313,88 @@ a.vi-stat:hover { background: var(--vi-selected); }
 .vi-hero--violet .vi-hero__value { margin-top: auto; font-size: 46px; letter-spacing: -0.03em; line-height: 1; }
 .vi-hero__note { font-size: 13px; line-height: 1.45; }
 .vi-hero a { color: var(--vi-white); font-weight: 700; font-size: 13px; }
+
+/* ── Signed-out pages (AuthShell, T-06 to T-11) ─────────── */
+.vi-auth {
+  display: flex; flex-wrap: wrap; min-height: 100vh; box-sizing: border-box;
+  background: var(--vi-canvas); font-family: var(--vi-font); color: var(--vi-ink);
+}
+.vi-auth__panel {
+  flex: 1 1 420px; position: relative; overflow: hidden; box-sizing: border-box; padding: 48px;
+  display: flex; flex-direction: column; justify-content: space-between; gap: 32px;
+  background: var(--vi-plum); color: var(--vi-white);
+}
+.vi-auth__blob { position: absolute; border-radius: 50%; pointer-events: none; }
+.vi-auth__blob--a { width: 520px; height: 520px; right: -200px; bottom: -180px; background: var(--vi-violet); opacity: 0.9; }
+.vi-auth__blob--b { width: 300px; height: 300px; right: 120px; bottom: -220px; background: var(--vi-lilac); opacity: 0.55; }
+.vi-auth__brand { position: relative; display: flex; align-items: center; gap: 10px; }
+.vi-auth__brand strong { display: flex; flex-direction: column; font-size: 18px; line-height: 1.05; }
+.vi-auth__brand strong span { font-size: 13px; font-weight: 500; color: var(--vi-on-plum); }
+.vi-auth__pitch { position: relative; display: flex; flex-direction: column; gap: 12px; max-width: 420px; }
+.vi-auth__eyebrow { font-size: 13px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--vi-on-plum); }
+.vi-auth__title { font-size: 36px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; }
+.vi-auth__body { font-size: 16px; line-height: 1.55; color: var(--vi-on-violet); }
+.vi-auth__footer { position: relative; font-size: 12px; color: var(--vi-on-plum); }
+.vi-auth__main {
+  flex: 1 1 520px; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 48px 24px;
+}
+.vi-auth__form { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 18px; }
+.vi-auth__form form { display: flex; flex-direction: column; gap: 18px; }
+.vi-auth__heading { display: flex; flex-direction: column; gap: 6px; }
+.vi-auth__heading h1 { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.02em; color: var(--vi-plum); }
+.vi-auth__heading p { margin: 0; font-size: 15px; line-height: 1.55; color: var(--vi-ink-2); }
+.vi-auth__links { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 14px; font-weight: 800; }
+.vi-auth__links a, .vi-auth__link { color: var(--vi-violet); text-decoration: none; font-weight: 800; }
+.vi-auth__links a:hover, .vi-auth__link:hover { color: var(--vi-plum); }
+.vi-auth__fine { font-size: 13px; line-height: 1.5; color: var(--vi-muted); text-align: center; margin: 0; }
+@media (max-width: 720px) {
+  .vi-auth__panel { flex-basis: 100%; padding: 28px 24px; gap: 20px; }
+  .vi-auth__title { font-size: 28px; }
+  .vi-auth__main { padding: 32px 16px; align-items: flex-start; }
+}
+
+/* ── Notice ─────────────────────────────────────────────── */
+.vi-notice { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 18px; border: 1.5px solid; font-size: 14px; line-height: 1.5; }
+.vi-notice__mark {
+  width: 28px; height: 28px; flex: 0 0 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  color: var(--vi-white); font-weight: 800;
+}
+.vi-notice__text { display: flex; flex-direction: column; gap: 2px; color: var(--vi-ink-2); }
+.vi-notice--success { background: var(--vi-green-tint); border-color: var(--vi-green-line); }
+.vi-notice--success .vi-notice__mark { background: var(--vi-green); }
+.vi-notice--success strong { color: var(--vi-green-ink); }
+.vi-notice--danger { background: var(--vi-orange-tint); border-color: var(--vi-orange-line); }
+.vi-notice--danger .vi-notice__mark { background: var(--vi-orange); }
+.vi-notice--danger strong { color: var(--vi-orange-ink); }
+.vi-notice--warning { background: var(--vi-amber-tint); border-color: #f2d59b; }
+.vi-notice--warning .vi-notice__mark { background: var(--vi-amber-ink); }
+.vi-notice--warning strong { color: var(--vi-amber-ink); }
+
+/* ── Status tile ────────────────────────────────────────── */
+.vi-tile { width: 64px; height: 64px; border-radius: 20px; display: flex; align-items: center; justify-content: center; }
+.vi-tile--mail { background: var(--vi-mist); color: var(--vi-violet); }
+.vi-tile--clock { background: var(--vi-amber-tint); color: var(--vi-amber-ink); }
+.vi-tile--check { background: var(--vi-green); color: var(--vi-white); border-radius: 50%; }
+
+/* ── Checkbox ───────────────────────────────────────────── */
+.vi-check { display: flex; align-items: center; gap: 10px; min-height: var(--vi-tap); font-family: var(--vi-font); font-size: 14px; color: var(--vi-ink-2); cursor: pointer; }
+.vi-check input { width: 18px; height: 18px; margin: 0; accent-color: var(--vi-violet); border-radius: 4px; }
+
+/* ── Password field + rules ─────────────────────────────── */
+.vi-field__label-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.vi-field__label-row a { font-size: 13px; font-weight: 800; color: var(--vi-violet); text-decoration: none; }
+.vi-field__label-row a:hover { color: var(--vi-plum); }
+.vi-password { position: relative; display: block; }
+.vi-password .vi-field__control { padding-right: 76px; }
+.vi-password__toggle {
+  position: absolute; right: 8px; top: 8px; height: 32px; padding: 0 10px; border: none; border-radius: 10px;
+  background: var(--vi-canvas); color: var(--vi-violet); font-family: inherit; font-weight: 800; font-size: 12px; cursor: pointer;
+}
+.vi-rules { margin: 0; padding: 12px 14px; list-style: none; border-radius: var(--vi-radius-lg); background: var(--vi-white); display: flex; flex-direction: column; gap: 6px; }
+.vi-rules__item { display: flex; align-items: center; gap: 8px; font-family: var(--vi-font); font-size: 13px; font-weight: 600; color: var(--vi-muted); }
+.vi-rules__mark {
+  width: 18px; height: 18px; flex: 0 0 18px; border-radius: 50%; background: var(--vi-line); color: var(--vi-white);
+  display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800;
+}
+.vi-rules__item--met { color: var(--vi-green-ink); }
+.vi-rules__item--met .vi-rules__mark { background: var(--vi-green); }

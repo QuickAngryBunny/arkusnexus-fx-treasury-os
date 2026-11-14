@@ -33,6 +33,10 @@
   --vi-orange-soft: #ffe3d6;
   --vi-danger: #a8350f;
   --vi-danger-deep: #8c2b0a;
+  --vi-amber-tint: #fff3dd; /* expired / waiting tiles (T-S1) */
+  --vi-amber-ink: #a36a00;
+  --vi-green-line: #9bd9be;
+  --vi-orange-line: #f4b79e;
 
   /* Type */
   --vi-font: var(--font-sans, "Manrope"), system-ui, sans-serif;
