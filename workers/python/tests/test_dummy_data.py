@@ -49,3 +49,20 @@ def test_seeder_refuses_a_real_data_tenant_before_touching_the_database():
 def test_seeder_refuses_another_tenants_dataset():
     with pytest.raises(ValueError):
         seed_tenant(None, _tenant("demo_norte", is_dummy=True), build_dataset("demo_bajio"))  # type: ignore[arg-type]
+
+
+def test_dummy_banks_are_fictional_stable_and_cover_both_currencies():
+    from fxworkers.dummy_data import DUMMY_BANKS
+
+    a = build_dataset("demo_norte")
+    assert {b.currency for b in a.banks} == {"MXN", "USD"}
+    assert [b.id for b in a.banks] == [b.id for b in build_dataset("demo_norte").banks]
+    assert {b.id for b in a.banks}.isdisjoint({b.id for b in build_dataset("demo_bajio").banks})
+    assert {b.name for b in a.banks} == {n for names in DUMMY_BANKS.values() for n in names}
+
+
+def test_clearing_refuses_a_real_data_tenant_before_touching_the_database():
+    from fxworkers.seed import clear_tenant
+
+    with pytest.raises(NotADummyTenantError):
+        clear_tenant(None, _tenant("arkus_nexus", is_dummy=False), build_dataset("arkus_nexus"))  # type: ignore[arg-type]

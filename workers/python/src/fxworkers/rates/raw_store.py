@@ -41,6 +41,7 @@ def make_key(provider: str, series_id: str, fetched_at: dt.datetime, digest: str
 class RawStore(Protocol):
     def put(self, key: str, data: bytes, metadata: dict[str, str]) -> None: ...
     def get(self, key: str) -> bytes: ...
+    def list(self, prefix: str) -> list[str]: ...
 
 
 class LocalRawStore:
@@ -55,6 +56,13 @@ class LocalRawStore:
 
     def get(self, key: str) -> bytes:
         return (self.root / key).read_bytes()
+
+    def list(self, prefix: str) -> list[str]:
+        """Keys under a prefix, sorted (keys sort by fetch time within a series)."""
+        base = self.root / prefix
+        if not base.exists():
+            return []
+        return sorted(str(p.relative_to(self.root)).replace("\\", "/") for p in base.rglob("*") if p.is_file())
 
 
 class BlobRawStore:
@@ -73,6 +81,9 @@ class BlobRawStore:
 
     def get(self, key: str) -> bytes:
         return self._container.download_blob(key).readall()
+
+    def list(self, prefix: str) -> list[str]:
+        return sorted(b.name for b in self._container.list_blobs(name_starts_with=prefix))
 
 
 def open_store() -> RawStore:

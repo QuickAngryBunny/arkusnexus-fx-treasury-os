@@ -21,3 +21,18 @@ def test_objects_round_trip_and_are_never_overwritten(tmp_path):
     assert again.data == b'{"a":1}' and again.sha256 == sha256(b'{"a":1}')
     with pytest.raises(FileExistsError):
         put_raw(store, "banxico", "SF43718", b'{"a":1}', {}, fetched_at=at)
+
+
+def test_list_returns_a_series_keys_in_fetch_order(tmp_path):
+    import datetime as dt
+
+    from fxworkers.rates.raw_store import LocalRawStore, put_raw
+
+    store = LocalRawStore(tmp_path)
+    t0 = dt.datetime(2026, 11, 10, 18, 0, tzinfo=dt.timezone.utc)
+    later = put_raw(store, "banxico", "SF43718", b'{"b": 2}', {}, fetched_at=t0 + dt.timedelta(days=2))
+    first = put_raw(store, "banxico", "SF43718", b'{"a": 1}', {}, fetched_at=t0)
+    put_raw(store, "banxico", "SF60648", b'{"c": 3}', {}, fetched_at=t0)
+
+    assert store.list("banxico/SF43718/") == [first.key, later.key]
+    assert store.list("nothing/here/") == []

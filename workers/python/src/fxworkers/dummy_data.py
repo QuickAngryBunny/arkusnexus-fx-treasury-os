@@ -33,10 +33,25 @@ class UserProfile:
     role: str
 
 
+# Fictional bank names only (no real institution), one list per currency.
+DUMMY_BANKS = {
+    "MXN": ["Banco Ficticio del Norte", "Banca Demo Pacífico"],
+    "USD": ["Dummy Bank USA", "Example Trust US"],
+}
+
+
+@dataclass(frozen=True)
+class Bank:
+    id: uuid.UUID
+    name: str
+    currency: str
+
+
 @dataclass(frozen=True)
 class Dataset:
     slug: str
     users: list[UserProfile] = field(default_factory=list)
+    banks: list[Bank] = field(default_factory=list)
 
 
 def _id(slug: str, kind: str, key: str) -> uuid.UUID:
@@ -82,4 +97,6 @@ def build_dataset(slug: str, user_count: int = 10) -> Dataset:
             )
         )
 
-    return Dataset(slug=slug, users=users)
+    banks = [Bank(id=_id(slug, "bank", f"{cur}:{name}"), name=name, currency=cur)
+             for cur, names in DUMMY_BANKS.items() for name in names]
+    return Dataset(slug=slug, users=users, banks=banks)

@@ -209,6 +209,19 @@ def _requests(args: argparse.Namespace) -> int:
 
     with psycopg.connect(control_plane_dsn()) as cp:
         process_pending(cp, open_store())
+    _jobs(args)
+    return 0
+
+
+def _jobs(args: argparse.Namespace) -> int:
+    """Tenant admin portal work: rate history for new tenants, dummy data (also run every minute by `rates schedule`)."""
+    from .control_plane import control_plane_dsn
+    from .rates.raw_store import open_store
+    from .tenant_jobs import run
+
+    ran = run(control_plane_dsn(), open_store())
+    if ran:
+        print(f"tenant jobs: {ran} processed", flush=True)
     return 0
 
 
@@ -281,6 +294,9 @@ def main(argv: list[str] | None = None) -> int:
 
     req = rates_sub.add_parser("requests", help='Process pending "Sync now" requests once')
     req.set_defaults(func=_requests)
+
+    jobs = sub.add_parser("jobs", help="Run tenant admin portal work once (new-tenant rate history, dummy data)")
+    jobs.set_defaults(func=_jobs)
 
     sched = rates_sub.add_parser("schedule", help="Run sync every business day after the FIX is published")
     sched.add_argument("--at", default="12:30", help="Window start, Mexico City time (default 12:30)")
