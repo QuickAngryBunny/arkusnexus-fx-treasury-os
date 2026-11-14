@@ -9,6 +9,8 @@ export type AppNavItem = {
   shortLabel?: ReactNode;
   href: string;
   icon: NavIcon;
+  /** Not built yet: shown greyed with this tag (e.g. "Later") and not a link. */
+  soon?: ReactNode;
 };
 
 export type AppNavProps = {
@@ -45,6 +47,14 @@ export function AppNav({ items, active, brand, label = "Primary", card, user, li
       <ul className="vi-nav__items">
         {items.map((it) => (
           <li key={it.key}>
+            {it.soon ? (
+              <span className="vi-nav__item vi-nav__item--soon" aria-disabled="true">
+                <StrokeIcon d={navIcons[it.icon]} />
+                <span className="vi-nav__label">{it.label}</span>
+                <span className="vi-nav__short" aria-hidden="true">{it.shortLabel ?? it.label}</span>
+                <span className="vi-nav__soon">{it.soon}</span>
+              </span>
+            ) : (
             <Link
               href={it.href}
               className="vi-nav__item"
@@ -55,6 +65,7 @@ export function AppNav({ items, active, brand, label = "Primary", card, user, li
               <span className="vi-nav__label">{it.label}</span>
               <span className="vi-nav__short" aria-hidden="true">{it.shortLabel ?? it.label}</span>
             </Link>
+            )}
           </li>
         ))}
       </ul>

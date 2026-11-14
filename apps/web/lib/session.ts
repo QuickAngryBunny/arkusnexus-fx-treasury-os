@@ -1,6 +1,6 @@
 import { cache } from "react";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { apiGet, SESSION_COOKIE, type SessionInfo, type TenantProfile } from "@/lib/api";
 import { DEFAULT_LOCALE, LOCALE_COOKIE, isLocale, translator, type Locale } from "@/lib/i18n";
 
@@ -15,7 +15,7 @@ export const getSession = cache(async () => {
 
   const session = hasCookie ? await apiGet<SessionInfo>("/api/auth/session") : null;
   const signedIn = session?.ok ? session.data : null;
-  const profile = signedIn ? await apiGet<TenantProfile>("/api/tenant/profile") : null;
+  const profile = signedIn?.tenant ? await apiGet<TenantProfile>("/api/tenant/profile") : null;
 
   // The user's choice wins; otherwise the company's default; otherwise Spanish.
   const chosen = store.get(LOCALE_COOKIE)?.value;
@@ -23,8 +23,9 @@ export const getSession = cache(async () => {
 
   return {
     session: signedIn,
-    /** The signed-in company's slug, or undefined when signed out. */
-    tenant: signedIn?.tenant.slug,
+    /** The signed-in company's slug, or undefined when signed out or in the portal only. */
+    tenant: signedIn?.tenant?.slug,
+    isPlatformAdmin: signedIn?.isPlatformAdmin ?? false,
     profile,
     viewer: signedIn?.user,
     role: signedIn?.role,
@@ -36,11 +37,27 @@ export const getSession = cache(async () => {
   };
 });
 
-/** For signed-in pages: the session, or a redirect to sign-in that returns here afterwards. */
+type Company = NonNullable<SessionInfo["tenant"]>;
+
+/**
+ * For FX app pages: a session with a company, or a redirect. Signed out → sign-in (returning here afterwards);
+ * a platform admin signed in to the portal only → /admin.
+ */
 export async function requireSession(returnTo = "/") {
   const ctx = await getSession();
   if (!ctx.session) {
     redirect(`/sign-in${returnTo !== "/" ? `?next=${encodeURIComponent(returnTo)}` : ""}`);
   }
-  return ctx as typeof ctx & { session: SessionInfo; tenant: string; viewer: SessionInfo["user"] };
+  if (!ctx.session.tenant) {
+    redirect(ctx.session.isPlatformAdmin ? "/admin" : "/sign-in");
+  }
+  return ctx as typeof ctx & { session: SessionInfo & { tenant: Company }; tenant: string; viewer: SessionInfo["user"] };
+}
+
+/** For the tenant admin portal: a platform admin's session; anyone else gets a 404 (the portal isn't advertised). */
+export async function requirePlatformAdmin() {
+  const ctx = await getSession();
+  if (!ctx.session) redirect("/sign-in?next=%2Fadmin");
+  if (!ctx.session.isPlatformAdmin) notFound();
+  return ctx as typeof ctx & { session: SessionInfo; viewer: SessionInfo["user"] };
 }

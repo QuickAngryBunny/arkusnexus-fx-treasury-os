@@ -79,12 +79,51 @@ export type TenantUser = { id: string; email: string; displayName: string };
 
 export type Role = "admin" | "approver" | "standard";
 
-/** GET /api/auth/session: who is signed in and which company the session works in. */
+/** GET /api/auth/session: who is signed in and which company the session works in (none: portal only). */
 export type SessionInfo = {
   user: { id: string; email: string; displayName: string };
-  tenant: { id: string; slug: string; displayName: string; isDummy: boolean };
-  role: Role;
+  tenant: { id: string; slug: string; displayName: string; isDummy: boolean } | null;
+  role: Role | null;
+  isPlatformAdmin: boolean;
   expiresAt: string;
+};
+
+/** GET /api/auth/companies: the tenant menu (A-05 / A-06). */
+export type Company = {
+  id: string;
+  slug: string;
+  displayName: string;
+  isDummy: boolean;
+  role: Role;
+  viaPlatformAdmin: boolean;
+  current: boolean;
+};
+
+export type TenantJob = {
+  id: string;
+  kind: "setup" | "load_dummy" | "clear_dummy";
+  step: "database" | "rate_history" | "invitation" | "work" | "done";
+  status: "pending" | "running" | "failed" | "done";
+  progress: number;
+  error: string | null;
+  firstAdminEmail: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+  events: Array<{ step: string; at: string; note: string }>;
+};
+
+/** GET /api/admin/tenants: the tenant admin portal (A-01, A-04). */
+export type AdminTenant = {
+  id: string;
+  slug: string;
+  displayName: string;
+  status: "provisioning" | "active" | "suspended" | "failed" | "archived";
+  isDummy: boolean;
+  createdAt: string;
+  schemaVersion: number | null;
+  members: number;
+  setup: TenantJob | null;
+  dummyJob: TenantJob | null;
 };
 
 export type RateSource = {

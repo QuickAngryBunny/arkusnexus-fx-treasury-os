@@ -398,3 +398,87 @@ a.vi-stat:hover { background: var(--vi-selected); }
 }
 .vi-rules__item--met { color: var(--vi-green-ink); }
 .vi-rules__item--met .vi-rules__mark { background: var(--vi-green); }
+
+/* ── AppNav: sections not built yet ─────────────────────── */
+.vi-nav__item--soon { color: var(--vi-muted); cursor: default; }
+.vi-nav__item--soon:hover { background: transparent; }
+.vi-nav__soon {
+  margin-left: auto; padding: 2px 8px; border-radius: var(--vi-radius-pill); background: var(--vi-canvas);
+  font-size: 11px; font-weight: 800; color: var(--vi-muted);
+}
+@media (max-width: 900px) { .vi-nav__soon { display: none; } }
+
+/* ── Drawer (A-02) ──────────────────────────────────────── */
+.vi-drawer { position: fixed; inset: 0; z-index: 50; font-family: var(--vi-font); }
+.vi-drawer__scrim { position: absolute; inset: 0; border: 0; padding: 0; background: var(--vi-scrim); cursor: pointer; }
+.vi-drawer__panel {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 460px; max-width: 100%; box-sizing: border-box;
+  display: flex; flex-direction: column; background: var(--vi-white); color: var(--vi-ink);
+  border-radius: var(--vi-radius-banner) 0 0 var(--vi-radius-banner); box-shadow: -30px 0 60px -30px rgb(62 31 85 / 45%);
+}
+.vi-drawer__head { padding: 24px 24px 12px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.vi-drawer__head h2 { margin: 0; font-size: 24px; font-weight: 800; color: var(--vi-plum); }
+.vi-drawer__kicker { font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--vi-violet); }
+.vi-drawer__close {
+  width: var(--vi-tap); height: var(--vi-tap); flex: 0 0 var(--vi-tap); border: 0; border-radius: 50%;
+  background: var(--vi-canvas); color: var(--vi-plum); display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.vi-drawer__close:focus-visible { outline: none; box-shadow: var(--vi-focus); }
+.vi-drawer__body { flex: 1; overflow-y: auto; padding: 8px 24px 16px; display: flex; flex-direction: column; gap: 18px; }
+.vi-drawer__foot { padding: 16px 24px 24px; border-top: 1px solid var(--vi-mist); display: flex; gap: 10px; }
+.vi-drawer__foot > * { flex: 1; }
+.vi-drawer__foot > *:last-child { flex: 2; }
+@media (max-width: 520px) { .vi-drawer__panel { border-radius: var(--vi-radius-banner) var(--vi-radius-banner) 0 0; top: auto; max-height: 92vh; width: 100%; } }
+
+/* ── Step list (A-03, A-S2) ─────────────────────────────── */
+.vi-steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; font-family: var(--vi-font); }
+.vi-steps__item { display: flex; gap: 14px; align-items: flex-start; padding: 12px 0; border-top: 1px solid var(--vi-mist); }
+.vi-steps__mark {
+  width: 28px; height: 28px; flex: 0 0 28px; box-sizing: border-box; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--vi-white);
+  border: 2px solid var(--vi-line);
+}
+.vi-steps__item--done .vi-steps__mark { background: var(--vi-green); border-color: var(--vi-green); }
+.vi-steps__item--failed .vi-steps__mark { background: var(--vi-orange); border-color: var(--vi-orange); }
+.vi-steps__item--running .vi-steps__mark { border: 3px solid var(--vi-violet); border-right-color: var(--vi-line); animation: vi-spin 1s linear infinite; }
+@keyframes vi-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .vi-steps__item--running .vi-steps__mark { animation: none; } }
+.vi-steps__text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.vi-steps__text strong { font-size: 15px; color: var(--vi-ink); }
+.vi-steps__item--todo .vi-steps__text strong { color: var(--vi-muted); }
+.vi-steps__item--failed .vi-steps__text strong { color: var(--vi-orange-ink); }
+.vi-steps__text > span { font-size: 13px; color: var(--vi-muted); }
+.vi-steps__bar { display: block; height: 10px; margin-top: 8px; border-radius: var(--vi-radius-pill); background: var(--vi-mist); overflow: hidden; }
+.vi-steps__bar > span { display: block; height: 100%; border-radius: inherit; background: var(--vi-violet); }
+
+/* ── Table ──────────────────────────────────────────────── */
+.vi-table-wrap { overflow-x: auto; }
+.vi-table { width: 100%; border-collapse: collapse; font-family: var(--vi-font); font-size: 14px; }
+.vi-table th { padding: 8px; text-align: left; font-size: 12px; font-weight: 700; color: var(--vi-muted); white-space: nowrap; }
+.vi-table td { padding: 14px 8px; border-top: 1px solid var(--vi-mist); color: var(--vi-ink-2); vertical-align: middle; }
+.vi-table td:first-child a, .vi-table td:first-child strong { font-weight: 800; color: var(--vi-ink); text-decoration: none; }
+.vi-table td.vi-table__actions { text-align: right; white-space: nowrap; }
+.vi-table__actions a, .vi-table__actions button {
+  font: inherit; font-weight: 700; color: var(--vi-violet); text-decoration: none; background: none; border: 0; padding: 0; cursor: pointer;
+}
+
+/* ── Tenant menu (A-05 sidebar, A-06 inside the mobile user menu) ── */
+.vi-tenants { display: flex; flex-direction: column; gap: 2px; }
+.vi-tenants__title { padding: 8px 12px 4px; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--vi-muted); }
+.vi-tenants__item {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 6px 12px; box-sizing: border-box;
+  border: 0; border-radius: var(--vi-radius-md); background: transparent; color: var(--vi-ink); text-align: left;
+  font: inherit; font-family: var(--vi-font); cursor: pointer;
+}
+.vi-tenants__item:hover { background: var(--vi-mist); }
+.vi-tenants__item[aria-checked="true"] { background: var(--vi-selected); }
+.vi-tenants__item:focus-visible { outline: none; box-shadow: var(--vi-focus); }
+.vi-tenants__mono {
+  width: 32px; height: 32px; flex: 0 0 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 800; background: var(--vi-mist); color: var(--vi-violet-ink);
+}
+.vi-tenants__mono--real { background: var(--vi-plum); color: var(--vi-white); }
+.vi-tenants__text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.vi-tenants__text strong { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vi-tenants__text span { font-size: 12px; color: var(--vi-muted); }
+.vi-tenants__link { padding: 8px 12px 10px; font-size: 14px; font-weight: 800; color: var(--vi-violet); text-decoration: none; }
