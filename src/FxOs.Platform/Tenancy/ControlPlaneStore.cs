@@ -20,6 +20,13 @@ public sealed class ControlPlaneStore(ControlPlaneDb controlPlane)
             new CommandDefinition(SelectTenant + " where t.slug = @slug", new { slug }, cancellationToken: ct));
     }
 
+    public async Task<TenantRecord?> FindByIdAsync(Guid id, CancellationToken ct = default)
+    {
+        await using var conn = await controlPlane.OpenAsync(ct);
+        return await conn.QuerySingleOrDefaultAsync<TenantRecord>(
+            new CommandDefinition(SelectTenant + " where t.id = @id", new { id }, cancellationToken: ct));
+    }
+
     public async Task<IReadOnlyList<TenantRecord>> ListAsync(CancellationToken ct = default)
     {
         await using var conn = await controlPlane.OpenAsync(ct);

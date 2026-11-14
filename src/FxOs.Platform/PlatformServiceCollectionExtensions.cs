@@ -62,6 +62,8 @@ public static class PlatformServiceCollectionExtensions
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton(IdentityOptions.Default);
         services.AddSingleton<IdentityStore>();
+        services.AddSingleton(SessionOptions.Default);
+        services.AddSingleton<SessionStore>();
 
         // Email: outbox (encrypted bodies) -> dispatcher -> Firebase Trigger Email `mail` collection.
         var email = configuration.GetSection(EmailSettings.Section).Get<EmailSettings>() ?? new EmailSettings();

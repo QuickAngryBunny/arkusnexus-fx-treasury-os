@@ -106,8 +106,13 @@ public sealed class TenantIsolationTests(PlatformFixture fx)
             foreach (var method in methods)
             {
                 var response = await client.SendAsync(PlatformFixture.Request(new HttpMethod(method), route.RoutePattern.RawText!, tenant: null));
-                Assert.True(response.StatusCode == HttpStatusCode.BadRequest,
-                    $"{method} {route.RoutePattern.RawText} answered {(int)response.StatusCode} without a tenant.");
+                Assert.True(response.StatusCode == HttpStatusCode.Unauthorized,
+                    $"{method} {route.RoutePattern.RawText} answered {(int)response.StatusCode} without a session or tenant.");
+
+                var forged = await client.SendAsync(PlatformFixture.Authed(
+                    new HttpMethod(method), route.RoutePattern.RawText!, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"));
+                Assert.True(forged.StatusCode == HttpStatusCode.Unauthorized,
+                    $"{method} {route.RoutePattern.RawText} answered {(int)forged.StatusCode} to an unknown session.");
             }
         }
     }
