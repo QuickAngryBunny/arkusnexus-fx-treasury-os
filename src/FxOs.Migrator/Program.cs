@@ -13,6 +13,8 @@ using Microsoft.Extensions.Hosting;
 //                                              [--platform-admin] [--set-by-reset]
 //                                                                       sign-in for a dummy tenant; asks for the password,
 //                                                                       or with --set-by-reset you set it via "Forgot password?"
+//   dotnet run --project src/FxOs.Migrator -- platform-admin <email> "<name>"
+//                                                                       tenant admin portal access (no company needed)
 
 var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
 {
@@ -90,8 +92,23 @@ switch (command)
         return result.Ok ? 0 : 1;
     }
 
+    case "platform-admin":
+    {
+        var positional = args.Where(a => !a.StartsWith('-')).ToArray();
+        if (positional.Length < 3)
+        {
+            Console.Error.WriteLine("Usage: platform-admin <email> \"<name>\"");
+            return 2;
+        }
+
+        await services.GetRequiredService<TenantMigrationService>().MigrateControlPlaneAsync(cts.Token);
+        var result = await services.GetRequiredService<DevAccountService>().SetPlatformAdminAsync(positional[1], positional[2], cts.Token);
+        (result.Ok ? Console.Out : Console.Error).WriteLine(result.Message);
+        return result.Ok ? 0 : 1;
+    }
+
     default:
-        Console.Error.WriteLine("Commands: control | tenants | provision <slug> \"<name>\" | list | dev-user <slug> <email> \"<name>\" [role]");
+        Console.Error.WriteLine("Commands: control | tenants | provision <slug> \"<name>\" | list | dev-user <slug> <email> \"<name>\" [role] | platform-admin <email> \"<name>\"");
         return 2;
 }
 

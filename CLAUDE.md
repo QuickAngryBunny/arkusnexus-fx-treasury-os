@@ -131,6 +131,16 @@ MFA/two-step verification.
   is gone; dummy-tenant logins come from Migrator `dev-user` (refuses real-data tenants). Test Postgres runs with
   `max_connections=1000` (one pool per tenant). Note for later: one connection pool per tenant also grows with tenants
   in production.
+  Sprint 3 (tenant admin portal): `/admin` in the same Next app (AdminShell, platform admins only, 404 otherwise) —
+  A-01 list/A-S1 empty, A-02 drawer, A-03/A-S2 setup steps (auto-refresh), A-04 manage, A-S3 type-to-confirm delete.
+  Control V0004 `tenant_job` (setup: database [API] → rate_history [Python worker, replays raw FIX objects + curves/news
+  best effort + first forecast] → invitation [API: setup invitation + email, tenant goes active] → done; load_dummy /
+  clear_dummy [worker]) and tenant status `deleted`. `TenantAdminService` + `/api/admin/*`; `TenantSetupRunner` hosted in
+  the API (`Platform:RunTenantSetup`, off in tests). Sessions may have no company (platform admin, portal only);
+  `CompanyAccess`: memberships + (platform admins) active dummy tenants, never real-data ones without a membership.
+  Tenant menu (A-05/A-06) from `/api/auth/companies`, switch with `/api/auth/session/company`. Migrator `platform-admin`.
+  Default platform admin: the owner's work email (set locally; not stored in the repo). Prototype text "No sign-in until
+  Phase 6" is outdated; the portal uses the app's sign-in.
 - Forecast rule: publish every model's backtest next to the naive benchmark; do not present a model as better than
   naive unless `mae_vs_naive` < 1 for that horizon.
 - Phase 0 sprint 3 (moved to the DevOps hand-off): Azure internal environment, deploy workflow running per-tenant

@@ -14,6 +14,39 @@ public sealed record DevAccountResult(bool Ok, string Message, Guid? UserId = nu
 public sealed class DevAccountService(
     ControlPlaneDb controlPlane, ControlPlaneStore store, TenantDataSources tenantDbs, IPasswordHasher hasher)
 {
+    /// <summary>
+    /// A platform admin (tenant admin portal) with no company needed. An existing account keeps its password and
+    /// memberships and just gets the flag; a new one gets a random password nobody sees, set with "Forgot password?".
+    /// Works on every environment the platform runs on, because it touches no tenant data.
+    /// </summary>
+    public async Task<DevAccountResult> SetPlatformAdminAsync(string email, string displayName, CancellationToken ct = default)
+    {
+        email = IdentityStore.NormalizeEmail(email);
+        displayName = displayName.Trim();
+        if (displayName.Length == 0 || !email.Contains('@', StringComparison.Ordinal))
+        {
+            return new DevAccountResult(false, "An email and a name are required.");
+        }
+
+        var hash = hasher.Hash(Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)) + "-7!");
+        await using var conn = await controlPlane.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        var (userId, isNew) = await conn.QuerySingleAsync<(Guid, bool)>(new CommandDefinition(
+            """
+            insert into user_account (email, display_name, password_hash, password_changed_at, is_platform_admin)
+            values (@email, @displayName, @hash, now(), true)
+            on conflict (email) do update set is_platform_admin = true, updated_at = now()
+            returning id, (xmax = 0)
+            """,
+            new { email, displayName, hash }, tx, cancellationToken: ct));
+        await ControlAudit.WriteAsync(conn, tx, ControlActor.System, "platform_admin.set", null, "user_account",
+            userId.ToString(), new { isNew }, ct);
+        await tx.CommitAsync(ct);
+        return new DevAccountResult(true, isNew
+            ? $"{email} is a platform admin. Set the password with \"Forgot password?\" on the sign-in page, then open /admin."
+            : $"{email} is a platform admin (password unchanged). Open /admin.", userId);
+    }
+
     /// <param name="password">The password; null sets a random one nobody sees, so the person sets theirs with
     /// "Forgot password" (the reset email goes through the outbox like any other).</param>
     /// <param name="platformAdmin">Also mark the login as a platform admin (tenant admin portal).</param>

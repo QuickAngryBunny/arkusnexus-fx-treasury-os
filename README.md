@@ -145,6 +145,22 @@ The key lives only in `workers/python/.env` (`GNEWS_API_KEY`), sent as the `X-Ap
 the last 30 days with a 12-hour delay and 100 requests a day (1 per second): older moves keep their marker and say no
 headlines are stored. Set `GNEWS_PLAN=paid` (history since 2020, real time) and run the sync again to fill them.
 
+## Tenant admin portal (Phase 3)
+
+`/admin` in the web app, for **platform admins** only (anyone else gets a 404). Make someone one with
+`dotnet run --project src/FxOs.Migrator -- platform-admin <email> "<name>"`; a new account then sets its password with
+"Forgot password?" on the sign-in page. The portal lists tenants, creates one from a name and the first admin's email,
+shows setup live, retries a failed step, renames, archives/restores, loads or clears dummy data, and deletes dummy
+tenants after typing the name (real-data tenants can only be archived).
+
+Setup runs in two places: the API creates the database (`TenantSetupService`, every 3 s), the Python worker copies the
+full rate history from the raw store and publishes the first forecast, then the API sends the setup invitation and
+activates the tenant. The worker part runs every minute inside `fxworkers rates schedule` (started by `./scripts/dev.sh`
+when `BANXICO_TOKEN` is set), or once with `workers/python/.venv/bin/fxworkers jobs`. Dummy-data jobs run the same way.
+
+In the FX app, the tenant menu above the user card (inside the user menu on phones) switches company. Platform admins
+can open any dummy tenant there without a membership; real-data tenants always need one.
+
 ## Email through Firebase (Phase 3)
 
 The API writes each email to the control-plane outbox (`email_outbox`, body encrypted with ASP.NET Data Protection)
