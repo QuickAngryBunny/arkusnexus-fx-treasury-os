@@ -21,6 +21,7 @@ app.UseStatusCodePages();
 app.UseMiddleware<TenantResolutionMiddleware>();
 
 app.MapHealthEndpoints();
+app.MapAuthEndpoints();
 if (settings.DevTenantSwitcherEnabled)
 {
     app.MapDevEndpoints();

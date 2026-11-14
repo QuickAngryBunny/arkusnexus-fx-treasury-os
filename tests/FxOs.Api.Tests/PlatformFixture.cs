@@ -18,7 +18,11 @@ public sealed class PlatformFixture : IAsyncLifetime
 {
     public const string PostgresImage = "timescale/timescaledb:2.17.2-pg17";
 
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder().WithImage(PostgresImage).Build();
+    // Every test provisions its own tenants, each with its own connection pool, so the default 100 connections run out.
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
+        .WithImage(PostgresImage)
+        .WithCommand("-c", "max_connections=1000")
+        .Build();
 
     public FxApiFactory Factory { get; private set; } = null!;
 
