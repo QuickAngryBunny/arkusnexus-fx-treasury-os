@@ -40,8 +40,14 @@ public sealed class TenantResolutionMiddleware(RequestDelegate next)
                 return;
             }
 
-            var own = await FindAsync(cache, "tenant-id:" + principal.TenantId,
-                () => store.FindByIdAsync(principal.TenantId, http.RequestAborted));
+            if (principal.TenantId is not { } tenantId)
+            {
+                await ProblemAsync(http, StatusCodes.Status403Forbidden, "No company selected",
+                    "This session works in the tenant admin portal only. Choose a company in the tenant menu.");
+                return;
+            }
+
+            var own = await FindAsync(cache, "tenant-id:" + tenantId, () => store.FindByIdAsync(tenantId, http.RequestAborted));
             if (own is not { IsActive: true })
             {
                 await ProblemAsync(http, StatusCodes.Status401Unauthorized, "Session ended", "The company is not active.");

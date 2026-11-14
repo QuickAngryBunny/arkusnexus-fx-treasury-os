@@ -28,7 +28,8 @@ public sealed record SignInResult(
 /// opens a session in the user's company: the one they used last, else their first active membership.
 /// </summary>
 public sealed class SignInService(
-    ControlPlaneDb controlPlane, IdentityStore identity, SessionStore sessions, IPasswordHasher hasher, TimeProvider time)
+    ControlPlaneDb controlPlane, IdentityStore identity, SessionStore sessions, CompanyAccess companies, IPasswordHasher hasher,
+    TimeProvider time)
 {
     public async Task<SignInResult> SignInAsync(SignInRequest request, CancellationToken ct = default)
     {
@@ -60,21 +61,10 @@ public sealed class SignInService(
         await using var conn = await controlPlane.OpenAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
 
-        // Last company used, else the oldest active membership; only active companies count.
-        var membership = await conn.QuerySingleOrDefaultAsync<(Guid TenantId, string Role)>(new CommandDefinition(
-            """
-            select m.tenant_id, m.role
-            from tenant_membership m
-            join tenant t on t.id = m.tenant_id and t.status = 'active'
-            where m.user_id = @userId and m.status = 'active'
-            order by (select max(s.created_at) from session s where s.user_id = m.user_id and s.tenant_id = m.tenant_id)
-                     desc nulls last,
-                     m.created_at
-            limit 1
-            """,
-            new { userId = account.Id }, tx, cancellationToken: ct));
-
-        if (membership.TenantId == Guid.Empty)
+        // Last company used, else the oldest active membership. A platform admin with no company still gets in,
+        // to the tenant admin portal only.
+        var landing = await companies.LandingAsync(conn, tx, account.Id, ct);
+        if (landing is null && !account.IsPlatformAdmin)
         {
             await ControlAudit.WriteAsync(conn, tx, ControlActor.User(account.Id), "account.sign_in_refused", null,
                 "user_account", account.Id.ToString(), new { reason = "no_active_membership" }, ct);
@@ -98,14 +88,14 @@ public sealed class SignInService(
             new { now = now.UtcDateTime, id = account.Id }, tx, ct);
 
         var session = await sessions.CreateAsync(
-            conn, tx, account.Id, membership.TenantId, request.Remember, request.UserAgent, request.IpAddress, ct);
+            conn, tx, account.Id, landing?.TenantId, request.Remember, request.UserAgent, request.IpAddress, ct);
 
-        await ControlAudit.WriteAsync(conn, tx, ControlActor.User(account.Id), "account.signed_in", membership.TenantId,
+        await ControlAudit.WriteAsync(conn, tx, ControlActor.User(account.Id), "account.signed_in", landing?.TenantId,
             "session", session.SessionId.ToString(), new { remember = request.Remember }, ct);
         await tx.CommitAsync(ct);
 
-        var principal = new SessionPrincipal(
-            session.SessionId, account.Id, account.Email, account.DisplayName, membership.TenantId, membership.Role, session.ExpiresAt);
+        var principal = new SessionPrincipal(session.SessionId, account.Id, account.Email, account.DisplayName,
+            landing?.TenantId, landing?.Role, session.ExpiresAt, account.IsPlatformAdmin);
         return new SignInResult(SignInOutcome.SignedIn, session, principal);
     }
 }

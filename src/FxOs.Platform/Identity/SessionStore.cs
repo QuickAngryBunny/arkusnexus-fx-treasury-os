@@ -4,9 +4,13 @@ using Npgsql;
 
 namespace FxOs.Platform.Identity;
 
-/// <summary>Who a valid session belongs to and which company it works in.</summary>
+/// <summary>
+/// Who a valid session belongs to and which company it works in. <see cref="TenantId"/> is null for a platform admin
+/// signed in to the tenant admin portal only; <see cref="Role"/> is then null too.
+/// </summary>
 public sealed record SessionPrincipal(
-    Guid SessionId, Guid UserId, string Email, string DisplayName, Guid TenantId, string Role, DateTimeOffset ExpiresAt)
+    Guid SessionId, Guid UserId, string Email, string DisplayName, Guid? TenantId, string? Role, DateTimeOffset ExpiresAt,
+    bool IsPlatformAdmin = false)
 {
     /// <summary>The actor written to tenant audit logs.</summary>
     public string Actor => "user:" + UserId.ToString("D");
@@ -43,7 +47,7 @@ public sealed class SessionStore(ControlPlaneDb controlPlane, TimeProvider time,
     }
 
     public async Task<NewSession> CreateAsync(
-        NpgsqlConnection conn, NpgsqlTransaction tx, Guid userId, Guid tenantId, bool remember, string? userAgent,
+        NpgsqlConnection conn, NpgsqlTransaction tx, Guid userId, Guid? tenantId, bool remember, string? userAgent,
         string? ipAddress, CancellationToken ct = default)
     {
         var now = time.GetUtcNow();
@@ -69,7 +73,12 @@ public sealed class SessionStore(ControlPlaneDb controlPlane, TimeProvider time,
         return new NewSession(id, secret.Raw, expiresAt);
     }
 
-    /// <summary>The principal for a raw session token, or null when it is unknown, ended, or no longer allowed in.</summary>
+    /// <summary>
+    /// The principal for a raw session token, or null when it is unknown, ended, or no longer allowed in. A session's
+    /// company is allowed while the membership and the company are active; a platform admin may also work in an active
+    /// dummy company without a membership (as its admin), or in no company at all (the portal). Real-data companies
+    /// always need a membership.
+    /// </summary>
     public async Task<SessionPrincipal?> ValidateAsync(string? rawToken, CancellationToken ct = default)
     {
         var hash = SecureToken.TryHash(rawToken);
@@ -82,12 +91,18 @@ public sealed class SessionStore(ControlPlaneDb controlPlane, TimeProvider time,
         await using var conn = await controlPlane.OpenAsync(ct);
         var row = await conn.QuerySingleOrDefaultAsync<Row>(new CommandDefinition(
             """
-            select s.id as session_id, s.user_id, u.email, u.display_name, s.tenant_id, m.role, s.expires_at, s.last_seen_at
+            select s.id as session_id, s.user_id, u.email, u.display_name, s.tenant_id, u.is_platform_admin,
+                   case when m.role is not null then m.role when u.is_platform_admin and t.is_dummy then 'admin' end as role,
+                   s.expires_at, s.last_seen_at
             from session s
             join user_account u on u.id = s.user_id
-            join tenant_membership m on m.user_id = s.user_id and m.tenant_id = s.tenant_id and m.status = 'active'
-            join tenant t on t.id = s.tenant_id and t.status = 'active'
+            left join tenant t on t.id = s.tenant_id
+            left join tenant_membership m on m.user_id = s.user_id and m.tenant_id = s.tenant_id and m.status = 'active'
             where s.token_hash = @hash and s.revoked_at is null and s.expires_at > @now
+              and (
+                    (s.tenant_id is null and u.is_platform_admin)
+                 or (t.status = 'active' and (m.role is not null or (u.is_platform_admin and t.is_dummy)))
+              )
             """,
             new { hash, now = now.UtcDateTime }, cancellationToken: ct));
         if (row is null)
@@ -101,7 +116,16 @@ public sealed class SessionStore(ControlPlaneDb controlPlane, TimeProvider time,
                 new { now = now.UtcDateTime, id = row.SessionId }, ct: ct);
         }
 
-        return new SessionPrincipal(row.SessionId, row.UserId, row.Email, row.DisplayName, row.TenantId, row.Role, Utc(row.ExpiresAt));
+        return new SessionPrincipal(
+            row.SessionId, row.UserId, row.Email, row.DisplayName, row.TenantId, row.Role, Utc(row.ExpiresAt), row.IsPlatformAdmin);
+    }
+
+    /// <summary>Moves a session to another company (tenant menu, A-05). The caller checks the person may work there.</summary>
+    public async Task SwitchTenantAsync(Guid sessionId, Guid tenantId, CancellationToken ct = default)
+    {
+        await using var conn = await controlPlane.OpenAsync(ct);
+        await conn.ExecAsync("update session set tenant_id = @tenantId where id = @sessionId and revoked_at is null",
+            new { tenantId, sessionId }, ct: ct);
     }
 
     public async Task<bool> RevokeAsync(Guid sessionId, string reason, CancellationToken ct = default)
@@ -136,8 +160,9 @@ public sealed class SessionStore(ControlPlaneDb controlPlane, TimeProvider time,
         public Guid UserId { get; set; }
         public string Email { get; set; } = "";
         public string DisplayName { get; set; } = "";
-        public Guid TenantId { get; set; }
-        public string Role { get; set; } = "";
+        public Guid? TenantId { get; set; }
+        public string? Role { get; set; }
+        public bool IsPlatformAdmin { get; set; }
         public DateTime ExpiresAt { get; set; }
         public DateTime LastSeenAt { get; set; }
     }

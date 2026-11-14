@@ -15,6 +15,7 @@ public sealed class TenantRecord
     public string? LoginRole { get; set; }
     public string? SecretRef { get; set; }
     public int? SchemaVersion { get; set; }
+    public DateTime CreatedAt { get; set; }
 
     public bool IsActive => Status == TenantStatus.Active;
 
@@ -28,6 +29,7 @@ public static class TenantStatus
     public const string Suspended = "suspended";
     public const string Failed = "failed";
     public const string Archived = "archived";
+    public const string Deleted = "deleted";
 }
 
 public sealed class TenantIsolationException(string message) : Exception(message);

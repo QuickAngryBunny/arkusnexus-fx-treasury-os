@@ -7,7 +7,7 @@ namespace FxOs.Platform.Tenancy;
 public sealed class ControlPlaneStore(ControlPlaneDb controlPlane)
 {
     private const string SelectTenant = """
-        select t.id, t.slug, t.display_name, t.status, t.is_dummy,
+        select t.id, t.slug, t.display_name, t.status, t.is_dummy, t.created_at,
                d.server_key, d.database_name, d.login_role, d.secret_ref, d.schema_version
         from tenant t
         left join tenant_database d on d.tenant_id = t.id

@@ -9,6 +9,9 @@ public interface ISecretStore
     Task<string?> GetAsync(string secretRef, CancellationToken ct = default);
 
     Task SetAsync(string secretRef, string value, CancellationToken ct = default);
+
+    /// <summary>Removes a secret (a deleted tenant's database password). Missing secrets are ignored.</summary>
+    Task DeleteAsync(string secretRef, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -34,6 +37,12 @@ public sealed class DevSecretStore(ControlPlaneDb controlPlane) : ISecretStore
             """,
             new { secretRef, value },
             ct: ct);
+    }
+
+    public async Task DeleteAsync(string secretRef, CancellationToken ct = default)
+    {
+        await using var conn = await controlPlane.OpenAsync(ct);
+        await conn.ExecAsync("delete from dev_secret where secret_ref = @secretRef", new { secretRef }, ct: ct);
     }
 }
 

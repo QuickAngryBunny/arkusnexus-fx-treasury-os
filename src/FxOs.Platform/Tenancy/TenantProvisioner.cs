@@ -20,8 +20,14 @@ public sealed class TenantProvisioner(
 {
     public const string Actor = "provisioner";
 
+    public Task<TenantRecord> ProvisionAsync(
+        string slug, string displayName, bool isDummy = true, CancellationToken ct = default) =>
+        ProvisionAsync(slug, displayName, isDummy, activate: true, ct);
+
+    /// <param name="activate">False leaves the tenant in 'provisioning' with its routing in place, for the portal's
+    /// setup, which activates it after the rate history is copied and the invitation is sent.</param>
     public async Task<TenantRecord> ProvisionAsync(
-        string slug, string displayName, bool isDummy = true, CancellationToken ct = default)
+        string slug, string displayName, bool isDummy, bool activate, CancellationToken ct = default)
     {
         TenantSlug.EnsureValid(slug);
         displayName = displayName?.Trim() ?? "";
@@ -135,8 +141,8 @@ public sealed class TenantProvisioner(
                     tx,
                     ct);
                 await cp.ExecAsync(
-                    "update tenant set status = 'active', updated_at = now() where id = @tenantId",
-                    new { tenantId },
+                    "update tenant set status = @status, updated_at = now() where id = @tenantId",
+                    new { tenantId, status = activate ? TenantStatus.Active : TenantStatus.Provisioning },
                     tx,
                     ct);
                 await tx.CommitAsync(ct);

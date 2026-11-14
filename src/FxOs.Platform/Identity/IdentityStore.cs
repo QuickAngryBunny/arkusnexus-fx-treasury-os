@@ -117,6 +117,17 @@ public sealed class IdentityStore(ControlPlaneDb controlPlane, TimeProvider time
     /// <summary>Issues an invitation link. An open invitation for the same tenant and email is revoked (resend).</summary>
     public async Task<IssuedToken> IssueInvitationAsync(NewInvitation request, ControlActor actor, CancellationToken ct = default)
     {
+        await using var conn = await controlPlane.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        var issued = await IssueInvitationAsync(conn, tx, request, actor, ct);
+        await tx.CommitAsync(ct);
+        return issued;
+    }
+
+    /// <summary>Same, inside the caller's transaction (so the invitation email is enqueued with it).</summary>
+    public async Task<IssuedToken> IssueInvitationAsync(
+        NpgsqlConnection conn, NpgsqlTransaction tx, NewInvitation request, ControlActor actor, CancellationToken ct = default)
+    {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(actor);
         if (!MembershipRole.IsValid(request.Role) || request.Kind is not (InvitationKind.TenantSetup or InvitationKind.Teammate))
@@ -127,9 +138,6 @@ public sealed class IdentityStore(ControlPlaneDb controlPlane, TimeProvider time
         var email = NormalizeEmail(request.Email);
         var now = time.GetUtcNow();
         var secret = SecureToken.New();
-
-        await using var conn = await controlPlane.OpenAsync(ct);
-        await using var tx = await conn.BeginTransactionAsync(ct);
 
         var alreadyMember = await conn.ScalarAsync<bool>(
             """
@@ -173,8 +181,6 @@ public sealed class IdentityStore(ControlPlaneDb controlPlane, TimeProvider time
 
         await ControlAudit.WriteAsync(conn, tx, actor, replaced > 0 ? "invitation.resent" : "invitation.sent", request.TenantId,
             "invitation", id.ToString(), new { request.Kind, request.Role, email }, ct);
-        await tx.CommitAsync(ct);
-
         return new IssuedToken(id, secret.Raw, expiresAt);
     }
 

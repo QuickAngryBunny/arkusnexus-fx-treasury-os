@@ -11,6 +11,15 @@ public sealed class TenantDataSources(TenantServerRegistry servers, ISecretStore
     private readonly ConcurrentDictionary<Guid, NpgsqlDataSource> _sources = new();
     private readonly SemaphoreSlim _gate = new(1, 1);
 
+    /// <summary>Closes and forgets a tenant's pool (before its database is dropped).</summary>
+    public async ValueTask RemoveAsync(Guid tenantId)
+    {
+        if (_sources.TryRemove(tenantId, out var source))
+        {
+            await source.DisposeAsync();
+        }
+    }
+
     public async ValueTask<NpgsqlDataSource> GetAsync(TenantRecord tenant, CancellationToken ct = default)
     {
         if (_sources.TryGetValue(tenant.Id, out var existing))

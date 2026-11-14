@@ -14,6 +14,11 @@ public sealed class AppLinks(Uri publicBaseUrl)
     public Uri ForgotPassword => new(Base, "forgot-password");
 
     public Uri ResetPassword(string rawToken) => new(Base, "reset-password?token=" + Uri.EscapeDataString(rawToken));
+
+    /// <summary>The first admin's setup link (O-01 → O-02, onboarding).</summary>
+    public Uri TenantSetup(string rawToken) => new(Base, "setup?token=" + Uri.EscapeDataString(rawToken));
+
+    public Uri Admin => new(Base, "admin");
 }
 
 public enum ResetOutcome
@@ -50,16 +55,18 @@ public sealed class PasswordResetService(
         await using var conn = await controlPlane.OpenAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
 
-        var account = await conn.QuerySingleOrDefaultAsync<(Guid Id, string Email, string DisplayName, Guid TenantId)>(
+        // Anyone who can sign in somewhere: an active membership in an active company, or a platform admin.
+        var account = await conn.QuerySingleOrDefaultAsync<(Guid Id, string Email, string DisplayName, Guid? TenantId)>(
             new CommandDefinition(
                 """
-                select u.id, u.email, u.display_name, m.tenant_id
+                select u.id, u.email, u.display_name,
+                       (select m.tenant_id from tenant_membership m join tenant t on t.id = m.tenant_id and t.status = 'active'
+                        where m.user_id = u.id and m.status = 'active' order by m.created_at limit 1) as tenant_id
                 from user_account u
-                join tenant_membership m on m.user_id = u.id and m.status = 'active'
-                join tenant t on t.id = m.tenant_id and t.status = 'active'
                 where u.email = @email and u.password_hash is not null
-                order by m.created_at
-                limit 1
+                  and (u.is_platform_admin or exists (
+                        select 1 from tenant_membership m join tenant t on t.id = m.tenant_id and t.status = 'active'
+                        where m.user_id = u.id and m.status = 'active'))
                 for update of u
                 """,
                 new { email = IdentityStore.NormalizeEmail(email) }, tx, cancellationToken: ct));
