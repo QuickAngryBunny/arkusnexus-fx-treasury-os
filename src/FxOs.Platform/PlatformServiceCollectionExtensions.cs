@@ -66,6 +66,7 @@ public static class PlatformServiceCollectionExtensions
         services.AddSingleton<SessionStore>();
         services.AddSingleton<SignInService>();
         services.AddSingleton<PasswordResetService>();
+        services.AddSingleton<DevAccountService>();
 
         // The web app's address, for links in emails. Always ends with "/" so relative paths append.
         var publicBase = configuration["App:PublicBaseUrl"] ?? "http://localhost:3000/";

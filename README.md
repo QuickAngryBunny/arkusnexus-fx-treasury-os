@@ -51,7 +51,10 @@ cd workers/python && .venv/bin/fxworkers rates backfill && .venv/bin/fxworkers c
 # 4. API on http://localhost:5080
 dotnet run --project src/FxOs.Api
 
-# 5. Web on http://localhost:3000 — pick a tenant in the top-right switcher
+# 5. A login for a dummy tenant (asks for the password: 12+ characters, a number and a symbol, not your name)
+dotnet run --project src/FxOs.Migrator -- dev-user demo_norte you@example.test "Your Name" admin
+
+# 6. Web on http://localhost:3000 — sign in with that login
 cp apps/web/.env.example apps/web/.env.local
 pnpm install && pnpm dev:web
 ```
@@ -62,12 +65,22 @@ After the first setup, start everything with one command (also after a restart):
 ./scripts/dev.sh     # Docker, API (.logs/api.log), rate scheduler (.logs/rates.log) and web; Ctrl+C stops them
 ```
 
-Try the API directly:
+Try the API directly. The web app sends the session token from its HTTP-only `fx_session` cookie as a Bearer
+token; on internal environments the developer header `X-Tenant` still opens **dummy** tenants (never real-data ones):
 
 ```bash
 curl -H "X-Tenant: demo_norte" http://localhost:5080/api/tenant/profile
 curl -H "X-Tenant: demo_bajio" http://localhost:5080/api/tenant/users
 ```
+
+## Sign-in (Phase 3)
+
+Email and password, checked by the API (Argon2id hashes in the control plane). Sign-in opens a session in the
+person's company; the web app keeps its token in an HTTP-only cookie (7 days with "Keep me signed in", else until the
+browser closes and 12 hours at most). Five wrong passwords lock the account for 15 minutes. Forgot password emails a
+single-use link valid for 1 hour; setting a new password signs out every session and emails a confirmation. Pages:
+`/sign-in`, `/forgot-password`, `/reset-password?token=…`. Dummy tenants get logins with the Migrator's `dev-user`;
+real companies only through invitations (Sprint 5). Emails link to `App:PublicBaseUrl` (`http://localhost:3000/`).
 
 ## Exchange rates (Phase 1)
 
@@ -170,7 +183,7 @@ For Azure (DevOps hand-off): use Workload Identity Federation for the sender acc
 `@fxos/ui` ships TypeScript source that Next compiles (`transpilePackages`). Import the styles once in the root
 layout (`import "@fxos/ui/styles.css"`) and the components from `@fxos/ui`. Tokens (`--vi-*`) come from the design
 canvas's "Violeta design system" artboard. Components that render links take `linkAs={Link}` for client navigation.
-With the developer switcher on, `/ui` shows every component (open it from the user menu → Development).
+In development builds, `/ui` shows every component (open it from the user menu → Development).
 
 Text lives in `apps/web/messages/es-MX.json` and `en-US.json`. The language comes from the user menu (cookie
 `fx_locale`), else the tenant's default locale, else Spanish.

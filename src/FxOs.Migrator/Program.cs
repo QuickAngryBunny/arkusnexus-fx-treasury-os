@@ -1,4 +1,5 @@
 using FxOs.Platform;
+using FxOs.Platform.Identity;
 using FxOs.Platform.Tenancy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -8,6 +9,8 @@ using Microsoft.Extensions.Hosting;
 //   dotnet run --project src/FxOs.Migrator -- tenants                   migrate every tenant database
 //   dotnet run --project src/FxOs.Migrator -- provision <slug> "<name>" create or repair a dummy tenant
 //   dotnet run --project src/FxOs.Migrator -- list                      list tenants and schema versions
+//   dotnet run --project src/FxOs.Migrator -- dev-user <slug> <email> "<name>" [admin|approver|standard]
+//                                                                       sign-in for a dummy tenant; asks for the password
 
 var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
 {
@@ -66,7 +69,58 @@ switch (command)
         return 0;
     }
 
+    case "dev-user":
+    {
+        var positional = args.Where(a => !a.StartsWith('-')).ToArray();
+        if (positional.Length < 4)
+        {
+            Console.Error.WriteLine("Usage: dev-user <slug> <email> \"<name>\" [admin|approver|standard]");
+            return 2;
+        }
+
+        // Typed (hidden) or piped; never an argument, so it stays out of shell history.
+        var password = ReadPassword("Password (12+ characters, a number and a symbol): ");
+        var result = await services.GetRequiredService<DevAccountService>().SetAsync(
+            positional[1], positional[2], positional[3], positional.Length > 4 ? positional[4] : MembershipRole.Admin, password, cts.Token);
+        (result.Ok ? Console.Out : Console.Error).WriteLine(result.Message);
+        return result.Ok ? 0 : 1;
+    }
+
     default:
-        Console.Error.WriteLine("Commands: control | tenants | provision <slug> \"<name>\" | list");
+        Console.Error.WriteLine("Commands: control | tenants | provision <slug> \"<name>\" | list | dev-user <slug> <email> \"<name>\" [role]");
         return 2;
+}
+
+static string ReadPassword(string prompt)
+{
+    if (Console.IsInputRedirected)
+    {
+        return Console.ReadLine() ?? "";
+    }
+
+    Console.Write(prompt);
+    var chars = new System.Text.StringBuilder();
+    while (true)
+    {
+        var key = Console.ReadKey(intercept: true);
+        if (key.Key == ConsoleKey.Enter)
+        {
+            break;
+        }
+
+        if (key.Key == ConsoleKey.Backspace)
+        {
+            if (chars.Length > 0)
+            {
+                chars.Length--;
+            }
+        }
+        else if (!char.IsControl(key.KeyChar))
+        {
+            chars.Append(key.KeyChar);
+        }
+    }
+
+    Console.WriteLine();
+    return chars.ToString();
 }

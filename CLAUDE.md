@@ -86,7 +86,7 @@ MFA/two-step verification.
   horizon filter and event markers.
 - Phase 3 (started, brief: `docs/phase-3-brief.md`): V0008 dropped the treasury scaffolding (bank_account,
   financial_transaction, legal_entity, department; dashboard cash/exposure/projection; /treasury, /exposure,
-  /simulator). `fxworkers seed` now writes dummy users only. Dev tenant switcher stays until sign-in (Sprint 2).
+  /simulator). `fxworkers seed` now writes dummy users only.
   Control V0002: `user_account` (lower-case email, Argon2id PHC hash, lock state, `is_platform_admin` for the tenant
   admin portal), `tenant_membership` (admin/approver/standard, active/deactivated), `invitation` (tenant_setup or
   teammate, one open per tenant+email), `account_token` (password_reset / email_change, one open per user+purpose),
@@ -117,6 +117,20 @@ MFA/two-step verification.
   Verified end to end 2026-11-14 against Firebase project `fx-treasury` (Gmail SMTP 250 OK). No service-account keys
   (org policy): local runs use ADC impersonating `fxos-mail-sender@fx-treasury-514701`; the org also disables
   automatic IAM grants, so extension roles were granted by hand (README).
+  Sprint 2 (sign-in): `SessionStore` (7 days remembered / 12 h, token hash only) and `TenantResolutionMiddleware` take
+  the company from `Authorization: Bearer <session>`; the `X-Tenant` dev header works only on internal environments and
+  only for dummy tenants. `SignInService` + `/api/auth/sign-in|sign-out|session` (same answer for unknown email and wrong
+  password, lock after 5, rehash, lands in the company used last). `PasswordResetService` +
+  `/api/auth/password/forgot|reset` (always 202, 1-minute cooldown, emails in the same transaction). `PasswordPolicy`
+  adds `personal_info` (no email local part or name part of 3+ letters). `EmailTemplates`: all nine brief emails in
+  EN/ES (`EmailLayout`, HTML-encoded, http(s) buttons, times in an `EmailClock` zone; Mexico City until profiles store
+  one). Web: `fx_session` HTTP-only cookie set by server actions (`app/auth-actions.ts`), `middleware.ts` + `requireSession`
+  send signed-out visitors to `/sign-in?next=`; pages `/sign-in` (T-06/T-S2), `/forgot-password` (T-07/T-08),
+  `/reset-password` (T-10/T-S1), `/reset-password/done` (T-11) built from `AuthShell`, `PasswordField`, `PasswordRules`,
+  `Notice`, `StatusTile`, `Checkbox`; `lib/password.ts` mirrors the policy for live checks. The web dev tenant switcher
+  is gone; dummy-tenant logins come from Migrator `dev-user` (refuses real-data tenants). Test Postgres runs with
+  `max_connections=1000` (one pool per tenant). Note for later: one connection pool per tenant also grows with tenants
+  in production.
 - Forecast rule: publish every model's backtest next to the naive benchmark; do not present a model as better than
   naive unless `mae_vs_naive` < 1 for that horizon.
 - Phase 0 sprint 3 (moved to the DevOps hand-off): Azure internal environment, deploy workflow running per-tenant
