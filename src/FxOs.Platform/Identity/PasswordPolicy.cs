@@ -19,8 +19,17 @@ public static class PasswordPolicy
     public const string RuleNumber = "number";
     public const string RuleSymbol = "symbol";
 
+    /// <summary>Not the email or a part of the name (from the prototype's T-10 rules).</summary>
+    public const string RulePersonalInfo = "personal_info";
+
     /// <summary>Returns the rule codes the password breaks; empty when it is acceptable.</summary>
-    public static IReadOnlyList<string> Check(string? password)
+    public static IReadOnlyList<string> Check(string? password) => Check(password, null, null);
+
+    /// <summary>
+    /// As <see cref="Check(string?)"/>, plus <see cref="RulePersonalInfo"/>: the password may not contain the email's
+    /// local part or any part of the name of three or more letters, ignoring case and accents.
+    /// </summary>
+    public static IReadOnlyList<string> Check(string? password, string? email, string? displayName)
     {
         var text = (password ?? "").Normalize(NormalizationForm.FormC);
 
@@ -48,10 +57,42 @@ public static class PasswordPolicy
             broken.Add(RuleSymbol);
         }
 
+        if (ContainsPersonalInfo(text, email, displayName))
+        {
+            broken.Add(RulePersonalInfo);
+        }
+
         return broken;
     }
 
     public static bool IsAcceptable(string? password) => Check(password).Count == 0;
+
+    private static bool ContainsPersonalInfo(string password, string? email, string? displayName)
+    {
+        var haystack = Fold(password);
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(email))
+        {
+            var local = email.Split('@')[0];
+            parts.Add(local);
+            parts.AddRange(local.Split(['.', '_', '-', '+'], StringSplitOptions.RemoveEmptyEntries));
+        }
+
+        if (!string.IsNullOrWhiteSpace(displayName))
+        {
+            parts.AddRange(displayName.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        }
+
+        return parts.Select(Fold).Any(p => p.Length >= 3 && haystack.Contains(p, StringComparison.Ordinal));
+    }
+
+    // Lower case without accents, so "Peña" and "pena" match.
+    private static string Fold(string value)
+    {
+        var decomposed = value.Normalize(NormalizationForm.FormD);
+        var kept = decomposed.Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark);
+        return new string(kept.ToArray()).ToLowerInvariant();
+    }
 
     // Anything that isn't a letter, digit, space or control character counts: punctuation, math, currency, emoji.
     private static bool IsSymbol(char c) =>

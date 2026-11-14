@@ -81,8 +81,46 @@ public static class AuthEndpoints
             return Results.Ok(Describe(principal, tenant));
         });
 
+        // Forgot password (T-07 → T-08): always the same answer, whether or not the account exists.
+        group.MapPost("/password/forgot", async (ForgotBody body, PasswordResetService resets, CancellationToken ct) =>
+        {
+            await resets.RequestAsync(body.Email, Locale(body.Locale), ct);
+            return Results.Accepted(value: new { });
+        });
+
+        // What the reset page shows (T-10, or T-S1 for an expired, used or unknown link).
+        group.MapGet("/password/reset", async (string? token, PasswordResetService resets, CancellationToken ct) =>
+        {
+            var link = await resets.DescribeAsync(token, ct);
+            return Results.Ok(new { state = State(link.State), email = link.Email });
+        });
+
+        // Set the new password (T-10 → T-11): signs out every session and emails "password changed".
+        group.MapPost("/password/reset", async (ResetBody body, PasswordResetService resets, CancellationToken ct) =>
+        {
+            var result = await resets.ResetAsync(body.Token, body.Password, Locale(body.Locale), ct);
+            return result.Outcome switch
+            {
+                ResetOutcome.Changed => Results.Ok(new { email = result.Email }),
+                ResetOutcome.WeakPassword => Results.Json(new { code = "weak_password", rules = result.BrokenRules },
+                    statusCode: StatusCodes.Status400BadRequest),
+                _ => Results.Json(new { code = "invalid_link", state = State(result.LinkState) }, statusCode: StatusCodes.Status410Gone),
+            };
+        });
+
         return group;
     }
+
+    private static string Locale(string? locale) => locale is "es-MX" ? "es-MX" : "en-US";
+
+    private static string State(TokenState state) => state switch
+    {
+        TokenState.Valid => "valid",
+        TokenState.Expired => "expired",
+        TokenState.Used => "used",
+        TokenState.Revoked => "revoked",
+        _ => "not_found",
+    };
 
     private static object Describe(SessionPrincipal principal, TenantRecord tenant) => new
     {
@@ -106,3 +144,7 @@ public static class AuthEndpoints
 }
 
 public sealed record SignInBody(string? Email, string? Password, bool Remember);
+
+public sealed record ForgotBody(string? Email, string? Locale);
+
+public sealed record ResetBody(string? Token, string? Password, string? Locale);

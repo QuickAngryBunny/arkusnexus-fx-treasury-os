@@ -65,6 +65,11 @@ public static class PlatformServiceCollectionExtensions
         services.AddSingleton(SessionOptions.Default);
         services.AddSingleton<SessionStore>();
         services.AddSingleton<SignInService>();
+        services.AddSingleton<PasswordResetService>();
+
+        // The web app's address, for links in emails. Always ends with "/" so relative paths append.
+        var publicBase = configuration["App:PublicBaseUrl"] ?? "http://localhost:3000/";
+        services.AddSingleton(new AppLinks(new Uri(publicBase.EndsWith('/') ? publicBase : publicBase + "/")));
 
         // Email: outbox (encrypted bodies) -> dispatcher -> Firebase Trigger Email `mail` collection.
         var email = configuration.GetSection(EmailSettings.Section).Get<EmailSettings>() ?? new EmailSettings();

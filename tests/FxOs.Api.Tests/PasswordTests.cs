@@ -113,6 +113,17 @@ public sealed class PasswordPolicyTests
         Assert.True(PasswordPolicy.IsAcceptable(new string('a', PasswordPolicy.MaxLength - 2) + "1!"));
     }
 
+    [Theory]
+    [InlineData("mariana.lopez@arkus.example", "Mariana López", "Mariana-2026-plan!", true)]
+    [InlineData("mariana.lopez@arkus.example", "Mariana López", "my-lopez-pass-26!", true)]
+    [InlineData("mariana.lopez@arkus.example", "Mariana López", "Conversión-2026-USD!", false)]
+    [InlineData("ana@arkus.example", "Ana Ruiz", "Banana-split-2026!", true)]
+    [InlineData("al@arkus.example", "Al Li", "Pal-of-mine-2026!", false)]
+    public void Passwords_may_not_contain_the_email_or_name(string email, string name, string password, bool personal)
+    {
+        Assert.Equal(personal, PasswordPolicy.Check(password, email, name).Contains(PasswordPolicy.RulePersonalInfo));
+    }
+
     [Fact]
     public void Null_is_treated_as_empty()
     {

@@ -320,6 +320,12 @@ public sealed class IdentityStore(ControlPlaneDb controlPlane, TimeProvider time
         IssueAccountTokenAsync(userId, AccountTokenPurpose.PasswordReset, null, options.PasswordResetLifetime,
             ControlActor.Anonymous, ct);
 
+    /// <summary>Same, inside the caller's transaction (so the reset email is enqueued with it).</summary>
+    public Task<IssuedToken> IssuePasswordResetAsync(
+        NpgsqlConnection conn, NpgsqlTransaction tx, Guid userId, CancellationToken ct = default) =>
+        IssueAccountTokenAsync(conn, tx, userId, AccountTokenPurpose.PasswordReset, null, options.PasswordResetLifetime,
+            ControlActor.Anonymous, ct);
+
     /// <summary>Issues a confirmation link for a new email address (24 hours). An open one for the user is revoked.</summary>
     public Task<IssuedToken> IssueEmailChangeAsync(Guid userId, string newEmail, CancellationToken ct = default) =>
         IssueAccountTokenAsync(userId, AccountTokenPurpose.EmailChange, NormalizeEmail(newEmail), options.EmailChangeLifetime,
@@ -343,7 +349,16 @@ public sealed class IdentityStore(ControlPlaneDb controlPlane, TimeProvider time
     /// Sets a new password from a reset link: single use, clears the lock, and ends every session of the user
     /// (T-09 → T-11). The caller enqueues the "password changed" email.
     /// </summary>
-    public async Task<AccountTokenResult> ResetPasswordAsync(string? rawToken, string newPasswordHash, CancellationToken ct = default)
+    public async Task<AccountTokenResult> ResetPasswordAsync(string? rawToken, string newPasswordHash, CancellationToken ct = default) =>
+        await ResetPasswordAsync(rawToken, newPasswordHash, null, ct);
+
+    /// <summary>
+    /// As above; <paramref name="onReset"/> runs in the same transaction after the password is set (the "password
+    /// changed" email goes to the outbox there), so the email exists only if the reset commits.
+    /// </summary>
+    public async Task<AccountTokenResult> ResetPasswordAsync(
+        string? rawToken, string newPasswordHash,
+        Func<NpgsqlConnection, NpgsqlTransaction, Guid, CancellationToken, Task>? onReset, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(newPasswordHash);
         var now = time.GetUtcNow();
@@ -368,6 +383,11 @@ public sealed class IdentityStore(ControlPlaneDb controlPlane, TimeProvider time
         var ended = await RevokeSessionsAsync(conn, tx, token.UserId, "password_changed", now, ct);
         await ControlAudit.WriteAsync(conn, tx, ControlActor.User(token.UserId), "account.password_reset", null,
             "user_account", token.UserId.ToString(), new { sessionsEnded = ended }, ct);
+        if (onReset is not null)
+        {
+            await onReset(conn, tx, token.UserId, ct);
+        }
+
         await tx.CommitAsync(ct);
 
         return new AccountTokenResult(AccountTokenOutcome.Succeeded, TokenState.Valid, token.UserId);
@@ -489,12 +509,21 @@ public sealed class IdentityStore(ControlPlaneDb controlPlane, TimeProvider time
     private async Task<IssuedToken> IssueAccountTokenAsync(
         Guid userId, string purpose, string? newEmail, TimeSpan lifetime, ControlActor actor, CancellationToken ct)
     {
+        await using var conn = await controlPlane.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        var issued = await IssueAccountTokenAsync(conn, tx, userId, purpose, newEmail, lifetime, actor, ct);
+        await tx.CommitAsync(ct);
+        return issued;
+    }
+
+    private async Task<IssuedToken> IssueAccountTokenAsync(
+        NpgsqlConnection conn, NpgsqlTransaction tx, Guid userId, string purpose, string? newEmail, TimeSpan lifetime,
+        ControlActor actor, CancellationToken ct)
+    {
         var now = time.GetUtcNow();
         var secret = SecureToken.New();
         var expiresAt = now + lifetime;
 
-        await using var conn = await controlPlane.OpenAsync(ct);
-        await using var tx = await conn.BeginTransactionAsync(ct);
         var replaced = await conn.ExecAsync(
             """
             update account_token set revoked_at = @now
@@ -513,8 +542,6 @@ public sealed class IdentityStore(ControlPlaneDb controlPlane, TimeProvider time
 
         await ControlAudit.WriteAsync(conn, tx, actor, $"account_token.{purpose}_issued", null, "user_account",
             userId.ToString(), new { replaced = replaced > 0 }, ct);
-        await tx.CommitAsync(ct);
-
         return new IssuedToken(id, secret.Raw, expiresAt);
     }
 
