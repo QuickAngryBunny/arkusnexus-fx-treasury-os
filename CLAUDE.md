@@ -109,6 +109,11 @@ MFA/two-step verification.
   non-active tenants), password reset 1 hour (clears the lock, ends all sessions), email change 24 hours (refused if the
   address is taken), 5 failed sign-ins → 15-minute lock. Links are single use (row lock on claim). Every change writes
   `control_audit_log` (`ControlAudit`) in the same transaction; raw tokens never reach the database or the audit log.
+  Email (`FxOs.Platform/Email`): `EmailOutbox.EnqueueAsync(conn, tx, EmailMessage)` in the caller's transaction; body
+  encrypted (Data Protection, control V0003 `body_protected`) and cleared once sent/failed. `EmailDispatcher` claims due
+  rows (SKIP LOCKED + 5-minute lease), sends through `IMailTransport` (`FirestoreMailTransport`: doc id = outbox id),
+  retries 1, 2, 4… minutes (max 60) up to 8 attempts. Only `Email:AllowedRecipients` are sent locally. Firebase settings
+  live in user secrets (README). Templates (EN/ES) and wiring the identity flows to the outbox are Sprint 2.
 - Forecast rule: publish every model's backtest next to the naive benchmark; do not present a model as better than
   naive unless `mae_vs_naive` < 1 for that horizon.
 - Phase 0 sprint 3 (moved to the DevOps hand-off): Azure internal environment, deploy workflow running per-tenant

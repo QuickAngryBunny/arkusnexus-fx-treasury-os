@@ -9,6 +9,7 @@
     <PackageReference Include="Npgsql" />
     <PackageReference Include="Dapper" />
     <PackageReference Include="Konscious.Security.Cryptography.Argon2" />
+    <PackageReference Include="Google.Cloud.Firestore" />
   </ItemGroup>
 
   <!-- SQL migrations live in /db and are embedded so every host (API, Migrator, tests) runs the same files. -->

@@ -1,9 +1,11 @@
 using Dapper;
 using FxOs.Platform.Audit;
 using FxOs.Platform.Data;
+using FxOs.Platform.Email;
 using FxOs.Platform.Identity;
 using FxOs.Platform.Secrets;
 using FxOs.Platform.Tenancy;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -60,6 +62,18 @@ public static class PlatformServiceCollectionExtensions
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton(IdentityOptions.Default);
         services.AddSingleton<IdentityStore>();
+
+        // Email: outbox (encrypted bodies) -> dispatcher -> Firebase Trigger Email `mail` collection.
+        var email = configuration.GetSection(EmailSettings.Section).Get<EmailSettings>() ?? new EmailSettings();
+        services.AddSingleton(email);
+        services.AddDataProtection().SetApplicationName("FxOs");
+        services.AddSingleton<EmailOutbox>();
+        services.TryAddSingleton<IMailTransport, FirestoreMailTransport>();
+        services.AddSingleton<EmailDispatcher>();
+        if (email.Dispatcher.Enabled && email.Firebase.IsConfigured)
+        {
+            services.AddHostedService<EmailDispatcherService>();
+        }
         services.AddSingleton<TenantMigrationService>();
 
         services.AddScoped<TenantContext>();
