@@ -27,6 +27,7 @@ public static class TenantStatus
     public const string Active = "active";
     public const string Suspended = "suspended";
     public const string Failed = "failed";
+    public const string Archived = "archived";
 }
 
 public sealed class TenantIsolationException(string message) : Exception(message);

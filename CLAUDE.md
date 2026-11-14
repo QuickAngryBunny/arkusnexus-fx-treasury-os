@@ -87,6 +87,11 @@ MFA/two-step verification.
 - Phase 3 (started, brief: `docs/phase-3-brief.md`): V0008 dropped the treasury scaffolding (bank_account,
   financial_transaction, legal_entity, department; dashboard cash/exposure/projection; /treasury, /exposure,
   /simulator). `fxworkers seed` now writes dummy users only. Dev tenant switcher stays until sign-in (Sprint 2).
+  Control V0002: `user_account` (lower-case email, Argon2id PHC hash, lock state, `is_platform_admin` for the tenant
+  admin portal), `tenant_membership` (admin/approver/standard, active/deactivated), `invitation` (tenant_setup or
+  teammate, one open per tenant+email), `account_token` (password_reset / email_change, one open per user+purpose),
+  `session`, `email_outbox` (pending → Firebase `mail`), append-only `control_audit_log`; tenant status `archived`
+  (+ `archived_at`). Token columns are 32-byte SHA-256 hashes.
 - Forecast rule: publish every model's backtest next to the naive benchmark; do not present a model as better than
   naive unless `mae_vs_naive` < 1 for that horizon.
 - Phase 0 sprint 3 (moved to the DevOps hand-off): Azure internal environment, deploy workflow running per-tenant
