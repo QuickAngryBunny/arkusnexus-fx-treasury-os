@@ -17,16 +17,12 @@ const toDay = (iso: string) => Math.round(Date.parse(`${iso}T00:00:00Z`) / DAY_M
  * Phase 3 (O-05) adds the welcome, news, first conversion plan and team cards; Phase 4 adds ongoing conversions.
  */
 export default async function Dashboard() {
-  const { switcher, tenant, tenants, profile, viewer, locale, t } = await getSession();
+  const { tenant, profile, viewer, locale, t } = await getSession();
 
   if (!tenant || !profile) {
     return (
       <AppShell active="dashboard">
-        {switcher && tenants?.ok && tenants.data.length === 0 ? (
-          <p className="subtitle">{t("dev.noTenants")}</p>
-        ) : (
-          <AlertBanner tone="info" title={t("dev.pickTenantTitle")}>{t("dev.pickTenantBody")}</AlertBanner>
-        )}
+        <AlertBanner tone="info" title={t("session.signInTitle")}>{t("session.signInBody")}</AlertBanner>
       </AppShell>
     );
   }
@@ -39,9 +35,9 @@ export default async function Dashboard() {
   }
 
   const [latest, forecasts, analytics] = await Promise.all([
-    apiGet<LatestRate>(`/api/tenant/rates/${SOURCE}/latest`, tenant),
-    apiGet<Forecasts>(`/api/tenant/forecasts/${SOURCE}`, tenant),
-    apiGet<RateAnalytics>(`/api/tenant/rates/${SOURCE}/analytics`, tenant),
+    apiGet<LatestRate>(`/api/tenant/rates/${SOURCE}/latest`),
+    apiGet<Forecasts>(`/api/tenant/forecasts/${SOURCE}`),
+    apiGet<RateAnalytics>(`/api/tenant/rates/${SOURCE}/analytics`),
   ]);
   if (!latest.ok) {
     return (
@@ -62,7 +58,7 @@ export default async function Dashboard() {
   // ── Header: greeting in the tenant's time zone ──────────
   const now = new Date();
   const hour = Number(new Intl.DateTimeFormat("en-US", { hour: "numeric", hourCycle: "h23", timeZone: tz }).format(now));
-  const firstName = (viewer?.displayName ?? t("user.devViewer")).split(" ")[0]!;
+  const firstName = (viewer?.displayName ?? "").split(" ")[0]!;
   const eyebrow = new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: tz }).format(now);
   const title = t(hour < 12 ? "dash.greeting.morning" : hour < 19 ? "dash.greeting.afternoon" : "dash.greeting.evening", { name: firstName });
 
@@ -71,7 +67,6 @@ export default async function Dashboard() {
   const p30 = primary?.points.find((p) => p.horizonDays === 30);
   const history = await apiGet<RateHistory>(
     `/api/tenant/rates/${SOURCE}?from=${new Date(Date.parse(`${r.date}T00:00:00Z`) - 30 * DAY_MS).toISOString().slice(0, 10)}&to=${r.date}`,
-    tenant,
   );
   // ── Forecast summary: trend now and how far the 30-day range can be trusted ──
   const a = analytics.ok ? analytics.data : null;

@@ -314,3 +314,6 @@ body {
 .fx-sigma--big { color: var(--vi-orange-ink); }
 .fx-sigma--normal { color: var(--vi-green-ink); }
 @media (max-width: 600px) { .fx-news-read { display: none; } }
+
+/* Language switch under signed-out forms. */
+.auth-locale { display: flex; justify-content: center; margin-top: 8px; }

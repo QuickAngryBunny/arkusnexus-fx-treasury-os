@@ -26,7 +26,7 @@ export default async function FullHistoryPage({ searchParams }: { searchParams: 
   const crumbs = (
     <Breadcrumb label={t("breadcrumb.label")} linkAs={Link} items={[{ label: t("nav.forecast"), href: "/forecast" }, { label: t("hist.crumb") }]} />
   );
-  const summary = tenant && profile?.ok ? await apiGet<HistorySummary>(`${BASE}/history/summary`, tenant) : null;
+  const summary = tenant && profile?.ok ? await apiGet<HistorySummary>(`${BASE}/history/summary`) : null;
 
   if (!tenant || !summary?.ok || !summary.data.firstDate || !summary.data.lastDate) {
     return (
@@ -34,7 +34,7 @@ export default async function FullHistoryPage({ searchParams }: { searchParams: 
         <div className="stack-sm">
           <PageHeader breadcrumb={crumbs} title={t("hist.title")} />
           {!tenant ? (
-            <AlertBanner tone="info" title={t("dev.pickTenantTitle")}>{t("dev.pickTenantBody")}</AlertBanner>
+            <AlertBanner tone="info" title={t("session.signInTitle")}>{t("session.signInBody")}</AlertBanner>
           ) : summary && !summary.ok ? (
             <AlertBanner tone="danger" title={t("hist.apiError")}>{`${summary.status || ""} ${summary.message}`.trim()}</AlertBanner>
           ) : (
@@ -78,9 +78,9 @@ export default async function FullHistoryPage({ searchParams }: { searchParams: 
         : { label: fmt(day, { dateStyle: "long" }), prev: shiftDay(day, -1) >= first ? href({ view, d: shiftDay(day, -1) }) : null, next: shiftDay(day, 1) <= last ? href({ view, d: shiftDay(day, 1) }) : null };
 
   const [yearData, monthData, dayData] = await Promise.all([
-    view === "year" ? apiGet<HistoryYear>(`${BASE}/history/year/${year}`, tenant) : null,
-    view === "month" ? apiGet<HistoryMonth>(`${BASE}/history/month/${month.slice(0, 4)}/${Number(month.slice(5, 7))}`, tenant) : null,
-    view === "day" ? apiGet<HistoryDay>(`${BASE}/history/day/${day}`, tenant) : null,
+    view === "year" ? apiGet<HistoryYear>(`${BASE}/history/year/${year}`) : null,
+    view === "month" ? apiGet<HistoryMonth>(`${BASE}/history/month/${month.slice(0, 4)}/${Number(month.slice(5, 7))}`) : null,
+    view === "day" ? apiGet<HistoryDay>(`${BASE}/history/day/${day}`) : null,
   ]);
 
   const rate = (v: number) => formatRate(locale, v);

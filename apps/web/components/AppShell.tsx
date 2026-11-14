@@ -1,33 +1,27 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AppNav, Badge, MenuDivider, MenuItem, MenuSection, UserMenu, type AppNavItem } from "@fxos/ui";
+import { signOut } from "@/app/auth-actions";
 import { LocaleSwitch } from "@/components/LocaleSwitch";
-import { TenantSwitcher } from "@/components/TenantSwitcher";
 import { LOCALES } from "@/lib/i18n";
-import { getSession } from "@/lib/session";
+import { requireSession } from "@/lib/session";
 
 export type Section = "dashboard" | "forecast";
 
-/** App frame for every signed-in screen: sidebar (AppNav + user menu), developer bar, main content. */
+/** App frame for every signed-in screen: sidebar (AppNav + user menu), main content. Signed out → /sign-in. */
 export async function AppShell({ active, children }: { active?: Section; children: ReactNode }) {
-  const { switcher, tenant, tenants, viewer, locale, t } = await getSession();
+  const { session, viewer, locale, t } = await requireSession();
+  const showDevTools = process.env.NODE_ENV !== "production";
 
   const items: AppNavItem[] = [
     { key: "dashboard", label: t("nav.dashboard"), shortLabel: t("nav.short.dashboard"), href: "/", icon: "dashboard" },
     { key: "forecast", label: t("nav.forecast"), shortLabel: t("nav.short.forecast"), href: "/forecast", icon: "forecast" },
   ];
 
-  const name = viewer?.displayName ?? t("user.devViewer");
+  const name = viewer.displayName;
 
-  // Dummy-data label and developer tenant picker (internal environments only).
-  const devBlock = (
-    <>
-      <Badge tone="orange">{t("dev.dummyNotice")}</Badge>
-      {switcher && tenants?.ok && (
-        <TenantSwitcher tenants={tenants.data} current={tenant} label={t("dev.switcher")} placeholder={t("dev.chooseTenant")} />
-      )}
-    </>
-  );
+  // Dummy companies say so wherever their data shows.
+  const devBlock = session.tenant.isDummy ? <Badge tone="orange">{t("dev.dummyNotice")}</Badge> : null;
 
   return (
     <div className="app">
@@ -44,9 +38,9 @@ export async function AppShell({ active, children }: { active?: Section; childre
           user={
             <>
             {/* Desktop: above the user card. Phones: inside the user menu (nav-dev--menu below). */}
-            <div className="nav-dev nav-dev--sidebar">{devBlock}</div>
-            <UserMenu name={name} email={viewer?.email} triggerLabel={t("user.menuLabel", { name })}>
-              <div className="nav-dev nav-dev--menu">{devBlock}</div>
+            {devBlock && <div className="nav-dev nav-dev--sidebar">{devBlock}</div>}
+            <UserMenu name={name} email={viewer.email} triggerLabel={t("user.menuLabel", { name })}>
+              {devBlock && <div className="nav-dev nav-dev--menu">{devBlock}</div>}
               <MenuSection>{t("user.language")}</MenuSection>
               <LocaleSwitch
                 label={t("user.language")}
@@ -55,7 +49,7 @@ export async function AppShell({ active, children }: { active?: Section; childre
               />
               <MenuDivider />
               <MenuItem disabled>{t("user.profile")}</MenuItem>
-              {switcher && (
+              {showDevTools && (
                 <>
                   <MenuDivider />
                   <MenuSection>{t("user.developer")}</MenuSection>
@@ -63,7 +57,9 @@ export async function AppShell({ active, children }: { active?: Section; childre
                 </>
               )}
               <MenuDivider />
-              <MenuItem disabled>{t("user.signOut")}</MenuItem>
+              <form action={signOut}>
+                <MenuItem type="submit">{t("user.signOut")}</MenuItem>
+              </form>
             </UserMenu>
             </>
           }
@@ -71,12 +67,6 @@ export async function AppShell({ active, children }: { active?: Section; childre
       </div>
 
       <div className="app__body">
-        {!switcher && <p className="subtitle">{t("signInLater")}</p>}
-        {tenants && !tenants.ok && (
-          <p className="error" role="alert">
-            {t("apiDown")}: {tenants.message}
-          </p>
-        )}
         <main id="main" tabIndex={-1}>
           {children}
         </main>

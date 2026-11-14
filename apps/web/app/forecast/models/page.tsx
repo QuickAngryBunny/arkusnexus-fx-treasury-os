@@ -21,14 +21,14 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
     />
   );
 
-  const forecasts = tenant && profile?.ok ? await apiGet<Forecasts>(`/api/tenant/forecasts/${SOURCE}`, tenant) : null;
+  const forecasts = tenant && profile?.ok ? await apiGet<Forecasts>(`/api/tenant/forecasts/${SOURCE}`) : null;
   if (!forecasts?.ok) {
     return (
       <AppShell active="forecast">
         <div className="stack-sm">
           <PageHeader breadcrumb={crumbs} title={t("models.crumb")} />
           {!tenant
-            ? <AlertBanner tone="info" title={t("dev.pickTenantTitle")}>{t("dev.pickTenantBody")}</AlertBanner>
+            ? <AlertBanner tone="info" title={t("session.signInTitle")}>{t("session.signInBody")}</AlertBanner>
             : <p className="subtitle">{t("fx.noForecast")}</p>}
         </div>
       </AppShell>

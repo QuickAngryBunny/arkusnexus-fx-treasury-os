@@ -1,53 +1,69 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 
 /** Server-side only. The browser never talks to the API directly. */
 const API_BASE_URL = process.env.FX_API_BASE_URL ?? "http://localhost:5080";
 
-export const TENANT_COOKIE = "fx_dev_tenant";
-export const devSwitcherEnabled = () => process.env.FX_DEV_TENANT_SWITCHER === "true";
+/** HTTP-only cookie with the session token; the API keeps only its hash. Sent to the API as a Bearer token. */
+export const SESSION_COOKIE = "fx_session";
 
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; status: number; message: string };
 
-export async function currentTenant(): Promise<string | undefined> {
-  if (!devSwitcherEnabled()) return undefined;
-  return (await cookies()).get(TENANT_COOKIE)?.value;
+async function sessionHeaders(): Promise<Record<string, string>> {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-export async function apiGet<T>(path: string, tenant?: string): Promise<ApiResult<T>> {
-  const headers: Record<string, string> = { Accept: "application/json" };
-  if (tenant) headers["X-Tenant"] = tenant;
-
+async function send<T>(path: string, init: RequestInit): Promise<ApiResult<T>> {
   try {
-    const res = await fetch(`${API_BASE_URL}${path}`, { headers, cache: "no-store" });
-    if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
-      return { ok: false, status: res.status, message: body?.detail ?? body?.title ?? res.statusText };
-    }
-    return { ok: true, data: (await res.json()) as T };
+    const res = await fetch(`${API_BASE_URL}${path}`, { ...init, cache: "no-store" });
+    const body = (await res.json().catch(() => null)) as (T & { detail?: string; title?: string; code?: string }) | null;
+    if (!res.ok) return { ok: false, status: res.status, message: body?.detail ?? body?.title ?? body?.code ?? res.statusText };
+    return { ok: true, data: body as T };
   } catch {
     return { ok: false, status: 0, message: `API unreachable at ${API_BASE_URL}` };
   }
 }
 
-export async function apiPost<T>(path: string, tenant: string, body: unknown = {}): Promise<ApiResult<T>> {
+/** GET as the signed-in user (the API takes the company from the session). */
+export async function apiGet<T>(path: string): Promise<ApiResult<T>> {
+  return send<T>(path, { headers: { Accept: "application/json", ...(await sessionHeaders()) } });
+}
+
+/** POST as the signed-in user. */
+export async function apiPost<T>(path: string, body: unknown = {}): Promise<ApiResult<T>> {
+  return send<T>(path, {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json", ...(await sessionHeaders()) },
+    body: JSON.stringify(body),
+  });
+}
+
+/** Raw call for the sign-in and password endpoints: status and JSON body, plus the browser's address and agent. */
+export async function authCall<T>(
+  method: "GET" | "POST", path: string, body?: unknown,
+): Promise<{ status: number; data: T | null }> {
+  const h = await headers();
+  const forwarded = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "";
   try {
     const res = await fetch(`${API_BASE_URL}${path}`, {
-      method: "POST",
-      headers: { Accept: "application/json", "Content-Type": "application/json", "X-Tenant": tenant },
-      body: JSON.stringify(body),
+      method,
       cache: "no-store",
+      headers: {
+        Accept: "application/json",
+        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+        ...(forwarded ? { "X-Client-IP": forwarded } : {}),
+        "X-Client-User-Agent": h.get("user-agent") ?? "",
+        ...(await sessionHeaders()),
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
     });
-    const data = (await res.json().catch(() => null)) as (T & { detail?: string; title?: string }) | null;
-    if (!res.ok) return { ok: false, status: res.status, message: data?.detail ?? data?.title ?? res.statusText };
-    return { ok: true, data: data as T };
+    return { status: res.status, data: (await res.json().catch(() => null)) as T | null };
   } catch {
-    return { ok: false, status: 0, message: `API unreachable at ${API_BASE_URL}` };
+    return { status: 0, data: null };
   }
 }
 
 // Response shapes (mirror src/FxOs.Api/Endpoints).
-export type DevTenant = { slug: string; displayName: string; status: string; isDummy: boolean; schemaVersion: number | null };
-
 export type TenantProfile = {
   slug: string;
   tenantId: string;
@@ -60,6 +76,16 @@ export type TenantProfile = {
 
 export type AuditEvent = { id: number; occurredAt: string; actor: string; action: string; entityType: string | null; entityId: string | null };
 export type TenantUser = { id: string; email: string; displayName: string };
+
+export type Role = "admin" | "approver" | "standard";
+
+/** GET /api/auth/session: who is signed in and which company the session works in. */
+export type SessionInfo = {
+  user: { id: string; email: string; displayName: string };
+  tenant: { id: string; slug: string; displayName: string; isDummy: boolean };
+  role: Role;
+  expiresAt: string;
+};
 
 export type RateSource = {
   code: string;

@@ -92,7 +92,7 @@ public static class AuthEndpoints
         group.MapGet("/password/reset", async (string? token, PasswordResetService resets, CancellationToken ct) =>
         {
             var link = await resets.DescribeAsync(token, ct);
-            return Results.Ok(new { state = State(link.State), email = link.Email });
+            return Results.Ok(new { state = State(link.State), email = link.Email, name = link.DisplayName });
         });
 
         // Set the new password (T-10 → T-11): signs out every session and emails "password changed".

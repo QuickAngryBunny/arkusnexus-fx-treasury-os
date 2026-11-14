@@ -1,7 +1,8 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { apiPost, currentTenant } from "@/lib/api";
+import { apiPost } from "@/lib/api";
+import { getSession } from "@/lib/session";
 
 const SOURCE = "banxico_fix";
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -15,19 +16,19 @@ function back(formData: FormData, outcome: string): never {
 }
 
 export async function markHoliday(formData: FormData): Promise<void> {
-  const tenant = await currentTenant();
+  const { tenant } = await getSession();
   const date = String(formData.get("date") ?? "");
   if (!tenant || !DATE.test(date)) back(formData, "error");
-  const result = await apiPost(`/api/tenant/rates/${SOURCE}/gaps/${date}/holiday`, tenant!, {});
+  const result = await apiPost(`/api/tenant/rates/${SOURCE}/gaps/${date}/holiday`, {});
   back(formData, result.ok ? `holiday:${date}` : "error");
 }
 
 export async function requestSync(formData: FormData): Promise<void> {
-  const tenant = await currentTenant();
+  const { tenant } = await getSession();
   const from = String(formData.get("from") ?? "");
   const to = String(formData.get("to") ?? "");
   if (!tenant) back(formData, "error");
   const body = DATE.test(from) && DATE.test(to) ? { from, to } : {};
-  const result = await apiPost(`/api/tenant/rates/${SOURCE}/sync-requests`, tenant!, body);
+  const result = await apiPost(`/api/tenant/rates/${SOURCE}/sync-requests`, body);
   back(formData, result.ok ? (DATE.test(from) ? `refetch:${from}` : "sync") : "error");
 }

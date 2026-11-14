@@ -1,28 +1,46 @@
 import { cache } from "react";
 import { cookies } from "next/headers";
-import { apiGet, currentTenant, devSwitcherEnabled, type DevTenant, type TenantProfile, type TenantUser } from "@/lib/api";
+import { redirect } from "next/navigation";
+import { apiGet, SESSION_COOKIE, type SessionInfo, type TenantProfile } from "@/lib/api";
 import { DEFAULT_LOCALE, LOCALE_COOKIE, isLocale, translator, type Locale } from "@/lib/i18n";
 
 /**
  * Per-request context shared by the layout, the app shell and pages (React cache dedupes the API calls).
- * Phase 0 has no sign-in: the viewer is the tenant's first dummy admin, and the developer switcher picks the tenant.
+ * The signed-in user and their company come from the session cookie (GET /api/auth/session); signed-out
+ * requests get a null session and the app shell sends them to /sign-in.
  */
 export const getSession = cache(async () => {
-  const switcher = devSwitcherEnabled();
-  const tenant = await currentTenant();
+  const store = await cookies();
+  const hasCookie = Boolean(store.get(SESSION_COOKIE)?.value);
 
-  const [tenants, profile, users] = await Promise.all([
-    switcher ? apiGet<DevTenant[]>("/api/dev/tenants") : Promise.resolve(null),
-    tenant ? apiGet<TenantProfile>("/api/tenant/profile", tenant) : Promise.resolve(null),
-    tenant ? apiGet<TenantUser[]>("/api/tenant/users", tenant) : Promise.resolve(null),
-  ]);
+  const session = hasCookie ? await apiGet<SessionInfo>("/api/auth/session") : null;
+  const signedIn = session?.ok ? session.data : null;
+  const profile = signedIn ? await apiGet<TenantProfile>("/api/tenant/profile") : null;
 
-  // The user's choice wins; otherwise the tenant's default; otherwise Spanish.
-  const chosen = (await cookies()).get(LOCALE_COOKIE)?.value;
+  // The user's choice wins; otherwise the company's default; otherwise Spanish.
+  const chosen = store.get(LOCALE_COOKIE)?.value;
   const locale: Locale = isLocale(chosen) ? chosen : profile?.ok ? profile.data.locale : DEFAULT_LOCALE;
 
-  // Dev switcher only: roles live in the control plane now (tenant_membership); sign-in (Sprint 2) replaces this.
-  const viewer = users?.ok ? users.data[0] : undefined;
-
-  return { switcher, tenant, tenants, profile, viewer, locale, t: translator(locale) };
+  return {
+    session: signedIn,
+    /** The signed-in company's slug, or undefined when signed out. */
+    tenant: signedIn?.tenant.slug,
+    profile,
+    viewer: signedIn?.user,
+    role: signedIn?.role,
+    /** The API answered, but not with a session (expired, revoked, deactivated). */
+    sessionEnded: hasCookie && !signedIn && session !== null && !session.ok && session.status === 401,
+    apiDown: session !== null && !session.ok && session.status === 0,
+    locale,
+    t: translator(locale),
+  };
 });
+
+/** For signed-in pages: the session, or a redirect to sign-in that returns here afterwards. */
+export async function requireSession(returnTo = "/") {
+  const ctx = await getSession();
+  if (!ctx.session) {
+    redirect(`/sign-in${returnTo !== "/" ? `?next=${encodeURIComponent(returnTo)}` : ""}`);
+  }
+  return ctx as typeof ctx & { session: SessionInfo; tenant: string; viewer: SessionInfo["user"] };
+}

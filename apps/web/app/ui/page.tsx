@@ -7,10 +7,10 @@ import { getSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
-/** Internal reference page for the Violeta library. Only with the developer switcher (internal environments). */
+/** Internal reference page for the Violeta library. Development builds only. */
 export default async function ComponentsPage() {
-  const { switcher, t } = await getSession();
-  if (!switcher) notFound();
+  const { t } = await getSession();
+  if (process.env.NODE_ENV === "production") notFound();
 
   return (
     <AppShell>

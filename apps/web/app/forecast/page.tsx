@@ -28,14 +28,14 @@ export default async function ForecastPage() {
   );
 
   if (!tenant || !profile?.ok) {
-    return shell(<AlertBanner tone="info" title={t("dev.pickTenantTitle")}>{t("dev.pickTenantBody")}</AlertBanner>);
+    return shell(<AlertBanner tone="info" title={t("session.signInTitle")}>{t("session.signInBody")}</AlertBanner>);
   }
 
   const [latest, sources, analytics, forecasts] = await Promise.all([
-    apiGet<LatestRate>(`/api/tenant/rates/${SOURCE}/latest`, tenant),
-    apiGet<RateSource[]>("/api/tenant/rates/sources", tenant),
-    apiGet<RateAnalytics>(`/api/tenant/rates/${SOURCE}/analytics`, tenant),
-    apiGet<Forecasts>(`/api/tenant/forecasts/${SOURCE}`, tenant),
+    apiGet<LatestRate>(`/api/tenant/rates/${SOURCE}/latest`),
+    apiGet<RateSource[]>("/api/tenant/rates/sources"),
+    apiGet<RateAnalytics>(`/api/tenant/rates/${SOURCE}/analytics`),
+    apiGet<Forecasts>(`/api/tenant/forecasts/${SOURCE}`),
   ]);
   if (!latest.ok) {
     return shell(
@@ -48,8 +48,8 @@ export default async function ForecastPage() {
   const r = latest.data;
   const from = new Date(Date.parse(`${r.date}T00:00:00Z`) - 365 * DAY_MS).toISOString().slice(0, 10);
   const [history, news] = await Promise.all([
-    apiGet<RateHistory>(`/api/tenant/rates/${SOURCE}?from=${from}&to=${r.date}`, tenant),
-    apiGet<NewsFeed>(`/api/tenant/news?from=${from}`, tenant),
+    apiGet<RateHistory>(`/api/tenant/rates/${SOURCE}?from=${from}&to=${r.date}`),
+    apiGet<NewsFeed>(`/api/tenant/news?from=${from}`),
   ]);
   const source = sources.ok ? sources.data.find((s) => s.code === SOURCE) : undefined;
   const a = analytics.ok ? analytics.data : null;
