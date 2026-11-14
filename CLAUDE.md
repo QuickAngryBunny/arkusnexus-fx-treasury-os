@@ -114,6 +114,9 @@ MFA/two-step verification.
   rows (SKIP LOCKED + 5-minute lease), sends through `IMailTransport` (`FirestoreMailTransport`: doc id = outbox id),
   retries 1, 2, 4… minutes (max 60) up to 8 attempts. Only `Email:AllowedRecipients` are sent locally. Firebase settings
   live in user secrets (README). Templates (EN/ES) and wiring the identity flows to the outbox are Sprint 2.
+  Verified end to end 2026-11-14 against Firebase project `fx-treasury` (Gmail SMTP 250 OK). No service-account keys
+  (org policy): local runs use ADC impersonating `fxos-mail-sender@fx-treasury-514701`; the org also disables
+  automatic IAM grants, so extension roles were granted by hand (README).
 - Forecast rule: publish every model's backtest next to the naive benchmark; do not present a model as better than
   naive unless `mae_vs_naive` < 1 for that horizon.
 - Phase 0 sprint 3 (moved to the DevOps hand-off): Azure internal environment, deploy workflow running per-tenant

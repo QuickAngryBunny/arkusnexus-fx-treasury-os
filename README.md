@@ -138,21 +138,32 @@ Trigger Email extension by creating a document in the Firestore `mail` collectio
 text } }`, document id = outbox id, so retries never send twice), then clears the stored body. Firebase only sends;
 it does no sign-in and holds nothing but the email itself.
 
-Local runs write to the **real** Firebase project, so the dispatcher sends only to `Email:AllowedRecipients`
-(exact addresses or `*@domain`); anything else is marked failed without reaching Firebase. Keep these settings out
-of the repo with user secrets:
+Local runs write to the **real** Firebase project (`fx-treasury`), so the dispatcher sends only to
+`Email:AllowedRecipients` (exact addresses or `*@domain`); anything else is marked failed without reaching Firebase.
+
+**Credentials: no key files.** The organization blocks service-account key creation, so the API uses Application
+Default Credentials, impersonating the sender service account
+`fxos-mail-sender@fx-treasury-514701.iam.gserviceaccount.com` (it lives in project `fx-treasury-514701` and has
+"Cloud Datastore User" on `fx-treasury`). Your Google account needs "Service Account Token Creator" on it.
 
 ```bash
+gcloud auth application-default login --impersonate-service-account=fxos-mail-sender@fx-treasury-514701.iam.gserviceaccount.com
 cd src/FxOs.Api
-dotnet user-secrets set "Email:Firebase:ProjectId" "<firebase-project-id>"
-dotnet user-secrets set "Email:Firebase:CredentialsFile" "/absolute/path/outside/the/repo/service-account.json"
+dotnet user-secrets set "Email:Firebase:ProjectId" "fx-treasury"
 dotnet user-secrets set "Email:AllowedRecipients:0" "you@yourcompany.com"
 ```
 
-The service account needs the "Cloud Datastore User" role. With `Email:Dispatcher:Enabled` (on in Development) and a
-project id set, the API starts the dispatcher. Try it with
-`curl -X POST localhost:5080/api/dev/email/test -H 'content-type: application/json' -d '{"to":"you@yourcompany.com"}'`
-and check `email_outbox.status` and the extension's `delivery` field on the Firestore document.
+`Email:Firebase:CredentialsFile` stays empty (it exists for environments that do use a key). With
+`Email:Dispatcher:Enabled` (on in Development) and a project id set, the API starts the dispatcher. Try it with
+`curl -X POST localhost:5080/api/dev/email/test -H 'content-type: application/json' -d '{"to":"you@yourcompany.com"}'`,
+then check `email_outbox.status` and the extension's `delivery.state` on the Firestore `mail` document.
+
+**Firebase project setup** (`fx-treasury`, already done). The organization disables automatic IAM grants, so the
+Trigger Email extension needed these by hand, all for `426189336240-compute@developer.gserviceaccount.com`:
+"Cloud Build Service Account" on the project (function build), and "Cloud Run Invoker" on the service
+`ext-firestore-send-email-hvmf-processqueue` (the Eventarc trigger calls it). Extension settings: Firestore `(default)`
+in `nam5`, collection `mail`, SMTP via the sending Gmail account with an app password in Secret Manager.
+For Azure (DevOps hand-off): use Workload Identity Federation for the sender account instead of a key.
 
 ## Violeta UI (`packages/ui`)
 
