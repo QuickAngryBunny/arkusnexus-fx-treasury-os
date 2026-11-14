@@ -8,6 +8,7 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Npgsql" />
     <PackageReference Include="Dapper" />
+    <PackageReference Include="Konscious.Security.Cryptography.Argon2" />
   </ItemGroup>
 
   <!-- SQL migrations live in /db and are embedded so every host (API, Migrator, tests) runs the same files. -->

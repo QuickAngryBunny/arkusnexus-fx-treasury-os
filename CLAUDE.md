@@ -98,6 +98,11 @@ MFA/two-step verification.
   (legal name, country, conversion direction, reporting currency, `onboarding_completed_at`), `bank` (name + MXN/USD,
   soft-removed, unique per currency ignoring case). Triggers: onboarding can't complete without one MXN and one USD
   bank; afterwards the last bank of a currency can't be removed.
+  Passwords (`FxOs.Platform/Identity`): `IPasswordHasher` = Argon2id (Konscious) as PHC strings, OWASP parameters
+  m=19456 KiB, t=2, p=1, 16-byte salt; `Verify` returns `SucceededRehashNeeded` for older parameters (rehash on sign-in);
+  call `VerifyAgainstDummy` for unknown emails so timing doesn't reveal accounts. Input is NFC-normalised.
+  `PasswordPolicy.Check` returns rule codes `min_length` (12), `max_length` (128), `number`, `symbol`; lengths count
+  visible characters. The web forms must mirror these codes for the live checks.
 - Forecast rule: publish every model's backtest next to the naive benchmark; do not present a model as better than
   naive unless `mae_vs_naive` < 1 for that horizon.
 - Phase 0 sprint 3 (moved to the DevOps hand-off): Azure internal environment, deploy workflow running per-tenant

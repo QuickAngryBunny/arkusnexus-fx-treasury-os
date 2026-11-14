@@ -1,6 +1,7 @@
 using Dapper;
 using FxOs.Platform.Audit;
 using FxOs.Platform.Data;
+using FxOs.Platform.Identity;
 using FxOs.Platform.Secrets;
 using FxOs.Platform.Tenancy;
 using Microsoft.Extensions.Configuration;
@@ -54,6 +55,7 @@ public static class PlatformServiceCollectionExtensions
         services.AddSingleton<ControlPlaneStore>();
         services.AddSingleton<TenantDataSources>();
         services.AddSingleton<TenantProvisioner>();
+        services.AddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
         services.AddSingleton<TenantMigrationService>();
 
         services.AddScoped<TenantContext>();
