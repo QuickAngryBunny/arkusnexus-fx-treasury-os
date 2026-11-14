@@ -59,7 +59,7 @@ export type TenantProfile = {
 };
 
 export type AuditEvent = { id: number; occurredAt: string; actor: string; action: string; entityType: string | null; entityId: string | null };
-export type TenantUser = { id: string; email: string; displayName: string; role: "standard" | "admin" };
+export type TenantUser = { id: string; email: string; displayName: string };
 
 export type RateSource = {
   code: string;

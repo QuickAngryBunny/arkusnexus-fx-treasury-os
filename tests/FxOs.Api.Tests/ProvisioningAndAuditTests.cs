@@ -94,7 +94,7 @@ public sealed class ProvisioningAndAuditTests(PlatformFixture fx)
             Assert.DoesNotContain(removed, tables);
         }
 
-        foreach (var kept in new[] { "tenant_settings", "user_profile", "audit_log", "fx_rate", "forecast_run", "news_article" })
+        foreach (var kept in new[] { "tenant_settings", "user_profile", "bank", "notification_preference", "audit_log", "fx_rate", "forecast_run", "news_article" })
         {
             Assert.Contains(kept, tables);
         }

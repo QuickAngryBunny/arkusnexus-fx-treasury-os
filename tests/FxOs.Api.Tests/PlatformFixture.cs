@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using FxOs.Api.Tenancy;
+using FxOs.Platform.Data;
 using FxOs.Platform.Tenancy;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -58,6 +59,17 @@ public sealed class PlatformFixture : IAsyncLifetime
     }
 
     public HttpClient Client() => Factory.CreateClient();
+
+    /// <summary>Opens the tenant's own database with its own login, as the API does.</summary>
+    public async Task<NpgsqlConnection> OpenTenantAsync(TenantRecord tenant)
+    {
+        var password = await Services.GetRequiredService<FxOs.Platform.Secrets.ISecretStore>().GetAsync(tenant.SecretRef!);
+        var cs = Services.GetRequiredService<TenantServerRegistry>()
+            .TenantConnectionString(tenant.ServerKey!, tenant.DatabaseName!, tenant.LoginRole!, password!);
+        var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+        return conn;
+    }
 
     public static HttpRequestMessage Request(HttpMethod method, string url, string? tenant, object? json = null)
     {

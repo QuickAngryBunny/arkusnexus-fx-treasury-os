@@ -37,7 +37,7 @@ public static class TenantEndpoints
             await using var conn = await db.OpenAsync(ct);
             var rows = await conn.QueryAsync<UserRow>(new CommandDefinition(
                 """
-                select id, email, display_name, role
+                select user_id as id, email, display_name
                 from user_profile
                 order by display_name
                 """,
@@ -82,7 +82,6 @@ internal sealed class UserRow
     public Guid Id { get; set; }
     public string Email { get; set; } = "";
     public string DisplayName { get; set; } = "";
-    public string Role { get; set; } = "";
 }
 
 internal sealed class AuditRow

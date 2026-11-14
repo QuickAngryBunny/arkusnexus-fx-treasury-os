@@ -92,6 +92,12 @@ MFA/two-step verification.
   teammate, one open per tenant+email), `account_token` (password_reset / email_change, one open per user+purpose),
   `session`, `email_outbox` (pending → Firebase `mail`), append-only `control_audit_log`; tenant status `archived`
   (+ `archived_at`). Token columns are 32-byte SHA-256 hashes.
+  Tenant V0009: `user_profile` rebuilt (`user_id` = control `user_account.id`; language, number format, email time
+  zone; no role — roles live only in `tenant_membership`), `notification_type` (9 U-03 items with defaults; weekly
+  summary off) + `notification_preference` (rows only when changed), company info as new `tenant_settings` columns
+  (legal name, country, conversion direction, reporting currency, `onboarding_completed_at`), `bank` (name + MXN/USD,
+  soft-removed, unique per currency ignoring case). Triggers: onboarding can't complete without one MXN and one USD
+  bank; afterwards the last bank of a currency can't be removed.
 - Forecast rule: publish every model's backtest next to the naive benchmark; do not present a model as better than
   naive unless `mae_vs_naive` < 1 for that horizon.
 - Phase 0 sprint 3 (moved to the DevOps hand-off): Azure internal environment, deploy workflow running per-tenant

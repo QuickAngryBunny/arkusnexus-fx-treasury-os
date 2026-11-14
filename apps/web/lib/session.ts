@@ -21,7 +21,8 @@ export const getSession = cache(async () => {
   const chosen = (await cookies()).get(LOCALE_COOKIE)?.value;
   const locale: Locale = isLocale(chosen) ? chosen : profile?.ok ? profile.data.locale : DEFAULT_LOCALE;
 
-  const viewer = users?.ok ? (users.data.find((u) => u.role === "admin") ?? users.data[0]) : undefined;
+  // Dev switcher only: roles live in the control plane now (tenant_membership); sign-in (Sprint 2) replaces this.
+  const viewer = users?.ok ? users.data[0] : undefined;
 
   return { switcher, tenant, tenants, profile, viewer, locale, t: translator(locale) };
 });

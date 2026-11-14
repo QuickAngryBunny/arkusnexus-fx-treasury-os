@@ -31,10 +31,10 @@ def seed_tenant(conn: psycopg.Connection, tenant: Tenant, dataset: Dataset) -> d
         for u in dataset.users:
             cur.execute(
                 """
-                insert into user_profile (id, email, display_name, role)
-                values (%s, %s, %s, %s) on conflict do nothing
+                insert into user_profile (user_id, email, display_name)
+                values (%s, %s, %s) on conflict do nothing
                 """,
-                (u.id, u.email, u.display_name, u.role),
+                (u.id, u.email, u.display_name),
             )
             inserted["user_profile"] += cur.rowcount
 
