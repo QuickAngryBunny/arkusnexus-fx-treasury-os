@@ -1,3 +1,5 @@
+using FxOs.Platform.Data;
+using FxOs.Platform.Email;
 using FxOs.Platform.Tenancy;
 
 namespace FxOs.Api.Endpoints;
@@ -48,8 +50,32 @@ public static class DevEndpoints
             return Results.Ok(new { tenant.Slug, tenant.DisplayName, tenant.Status, tenant.DatabaseName, tenant.SchemaVersion });
         });
 
+        // Queues a test email through the outbox; the dispatcher sends it if the address is in Email:AllowedRecipients.
+        group.MapPost("/email/test", async (TestEmailRequest body, EmailOutbox outbox, EmailSettings email, ControlPlaneDb db,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(body.To) || !body.To.Contains('@', StringComparison.Ordinal))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["to"] = ["An email address is required."] });
+            }
+
+            await using var conn = await db.OpenAsync(ct);
+            var id = await outbox.EnqueueAsync(conn, null, new EmailMessage(
+                "dev_test", "en-US", body.To, "FX Intelligence test email",
+                "<p>This is a test email from the FX Intelligence API (local development).</p>",
+                "This is a test email from the FX Intelligence API (local development)."), ct);
+            return Results.Accepted(value: new
+            {
+                id,
+                allowed = email.IsAllowed(body.To),
+                dispatcherRunning = email.Dispatcher.Enabled && email.Firebase.IsConfigured,
+            });
+        });
+
         return group;
     }
 }
 
 public sealed record ProvisionTenantRequest(string Slug, string DisplayName);
+
+public sealed record TestEmailRequest(string To);

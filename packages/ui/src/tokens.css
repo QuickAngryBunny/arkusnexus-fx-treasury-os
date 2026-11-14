@@ -1,0 +1,64 @@
+/*
+ * Violeta design tokens. Source: design canvas, "Violeta design system" artboard (Design-System.dc.html).
+ * Light theme only. Font: Manrope 400–800 (the app loads it and sets --font-sans).
+ */
+:root {
+  /* Brand */
+  --vi-violet: #6c10e0;   /* primary actions, active states, focus */
+  --vi-plum: #3e1f55;     /* headings, dark cards, nav setup card */
+  --vi-lavender: #a04fe6; /* blob accents on violet cards */
+  --vi-lilac: #b06bea;    /* estimated bars, avatar ring, links on dark */
+  --vi-mist: #efe6fb;     /* chips, icon tiles, track backgrounds */
+  --vi-canvas: #f6f3fb;   /* app background, inset panels */
+  --vi-line: #e3d2f7;     /* input borders, dividers, outline buttons */
+  --vi-track: #d9c4f2;    /* switch track (off) */
+  --vi-selected: #f6f0ff; /* selected row / switch-on surface */
+
+  /* Text */
+  --vi-ink: #24152f;
+  --vi-ink-2: #4a3d57;
+  --vi-muted: #6b6378;
+  --vi-violet-ink: #4b1499;
+  --vi-on-violet: #ebddfb;
+  --vi-on-plum: #d9c4f2;
+  --vi-white: #ffffff;
+
+  /* Semantic */
+  --vi-green: #17a673;
+  --vi-green-ink: #0f7a54;
+  --vi-green-tint: #e6f6ef;
+  --vi-orange: #e8582e;
+  --vi-orange-ink: #a33a16;
+  --vi-orange-tint: #fff1ea;
+  --vi-orange-soft: #ffe3d6;
+  --vi-danger: #a8350f;
+  --vi-danger-deep: #8c2b0a;
+  --vi-amber-tint: #fff3dd; /* expired / waiting tiles (T-S1) */
+  --vi-amber-ink: #a36a00;
+  --vi-green-line: #9bd9be;
+  --vi-orange-line: #f4b79e;
+
+  /* Type */
+  --vi-font: var(--font-sans, "Manrope"), system-ui, sans-serif;
+
+  /* Shape */
+  --vi-radius-pill: 999px;
+  --vi-radius-sm: 12px;
+  --vi-radius-md: 14px;
+  --vi-radius-lg: 16px;
+  --vi-radius-card: 24px;
+  --vi-radius-panel: 28px;
+  --vi-radius-banner: 32px;
+
+  /* Spacing */
+  --vi-space-1: 4px;
+  --vi-space-2: 8px;
+  --vi-space-3: 12px;
+  --vi-space-4: 16px;
+  --vi-space-5: 24px;
+  --vi-space-6: 36px;
+
+  --vi-tap: 44px;
+  --vi-focus: 0 0 0 3px rgb(108 16 224 / 35%);
+  --vi-scrim: rgb(36 21 47 / 45%);
+}

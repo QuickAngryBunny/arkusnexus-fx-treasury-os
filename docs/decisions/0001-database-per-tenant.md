@@ -11,7 +11,8 @@ all PRD §8 entities except `Tenant`, including its own copy of the public excha
 sync settings, corrections and forecasts.
 
 A small **control-plane** database (`fx_control`) holds only what the app needs before it knows the tenant:
-tenants, database routing and schema version, and (from Phase 3) identities and subscriptions.
+tenants, database routing and schema version, and (from Phase 3) login identities, memberships with roles,
+invitations, password resets and sessions. There is no billing or subscription data.
 
 ## How it is enforced
 

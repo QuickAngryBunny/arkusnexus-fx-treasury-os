@@ -9,6 +9,7 @@ description = "FX Intelligence & Treasury OS data workers: dummy-data seeding (P
 requires-python = ">=3.12"
 dependencies = [
     "psycopg[binary]>=3.2",
+    "azure-storage-blob>=12.19",
 ]
 
 [project.optional-dependencies]

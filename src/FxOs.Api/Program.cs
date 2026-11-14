@@ -21,12 +21,17 @@ app.UseStatusCodePages();
 app.UseMiddleware<TenantResolutionMiddleware>();
 
 app.MapHealthEndpoints();
+app.MapAuthEndpoints();
 if (settings.DevTenantSwitcherEnabled)
 {
     app.MapDevEndpoints();
 }
 
 app.MapTenantEndpoints();
+app.MapRateEndpoints();
+app.MapForecastEndpoints();
+app.MapRateHistoryEndpoints();
+app.MapNewsEndpoints();
 
 await app.RunAsync();
 

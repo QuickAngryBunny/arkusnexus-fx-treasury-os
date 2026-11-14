@@ -26,30 +26,15 @@ def seed_tenant(conn: psycopg.Connection, tenant: Tenant, dataset: Dataset) -> d
     if dataset.slug != tenant.slug:
         raise ValueError(f"Dataset for '{dataset.slug}' cannot be seeded into tenant '{tenant.slug}'.")
 
-    inserted = {"legal_entity": 0, "department": 0, "user_profile": 0}
+    inserted = {"user_profile": 0}
     with conn.transaction(), conn.cursor() as cur:
-        for le in dataset.legal_entities:
-            cur.execute(
-                """
-                insert into legal_entity (id, name, tax_id, country, functional_currency)
-                values (%s, %s, %s, %s, %s) on conflict do nothing
-                """,
-                (le.id, le.name, le.tax_id, le.country, le.functional_currency),
-            )
-            inserted["legal_entity"] += cur.rowcount
-        for d in dataset.departments:
-            cur.execute(
-                "insert into department (id, name, legal_entity_id) values (%s, %s, %s) on conflict do nothing",
-                (d.id, d.name, d.legal_entity_id),
-            )
-            inserted["department"] += cur.rowcount
         for u in dataset.users:
             cur.execute(
                 """
-                insert into user_profile (id, email, display_name, role, department_id)
-                values (%s, %s, %s, %s, %s) on conflict do nothing
+                insert into user_profile (user_id, email, display_name)
+                values (%s, %s, %s) on conflict do nothing
                 """,
-                (u.id, u.email, u.display_name, u.role, u.department_id),
+                (u.id, u.email, u.display_name),
             )
             inserted["user_profile"] += cur.rowcount
 
@@ -61,3 +46,4 @@ def seed_tenant(conn: psycopg.Connection, tenant: Tenant, dataset: Dataset) -> d
             (ACTOR, str(tenant.id), json.dumps({"inserted": inserted})),
         )
     return inserted
+

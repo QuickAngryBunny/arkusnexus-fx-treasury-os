@@ -1,7 +1,5 @@
 using Dapper;
-using FxOs.Platform.Audit;
 using FxOs.Platform.Tenancy;
-using Npgsql;
 
 namespace FxOs.Api.Endpoints;
 
@@ -19,11 +17,7 @@ public static class TenantEndpoints
                 "select tenant_id, display_name, base_currency, locale, time_zone from tenant_settings where id = 1",
                 cancellationToken: ct));
             var counts = await conn.QuerySingleAsync<TenantCountsRow>(new CommandDefinition(
-                """
-                select (select count(*) from legal_entity) as legal_entities,
-                       (select count(*) from department)   as departments,
-                       (select count(*) from user_profile) as users
-                """,
+                "select count(*) as users from user_profile",
                 cancellationToken: ct));
 
             return Results.Ok(new
@@ -38,78 +32,14 @@ public static class TenantEndpoints
             });
         });
 
-        group.MapGet("/legal-entities", async (ITenantConnectionFactory db, CancellationToken ct) =>
-        {
-            await using var conn = await db.OpenAsync(ct);
-            var rows = await conn.QueryAsync<LegalEntityRow>(new CommandDefinition(
-                "select id, name, tax_id, country, functional_currency from legal_entity order by name",
-                cancellationToken: ct));
-            return Results.Ok(rows);
-        });
-
-        group.MapGet("/departments", async (ITenantConnectionFactory db, CancellationToken ct) =>
-        {
-            await using var conn = await db.OpenAsync(ct);
-            var rows = await conn.QueryAsync<DepartmentRow>(new CommandDefinition(
-                """
-                select d.id, d.name, d.legal_entity_id, le.name as legal_entity_name
-                from department d
-                left join legal_entity le on le.id = d.legal_entity_id
-                order by le.name nulls first, d.name
-                """,
-                cancellationToken: ct));
-            return Results.Ok(rows);
-        });
-
-        group.MapPost("/departments", async (
-            CreateDepartmentRequest body, ITenantConnectionFactory db, IAuditWriter audit, CancellationToken ct) =>
-        {
-            var name = body.Name?.Trim() ?? "";
-            if (name.Length is 0 or > 120)
-            {
-                return Results.ValidationProblem(new Dictionary<string, string[]>
-                {
-                    ["name"] = ["Name is required (max 120 characters)."],
-                });
-            }
-
-            await using var conn = await db.OpenAsync(ct);
-            await using var tx = await conn.BeginTransactionAsync(ct);
-            try
-            {
-                var id = await conn.ExecuteScalarAsync<Guid>(new CommandDefinition(
-                    "insert into department (legal_entity_id, name) values (@legalEntityId, @name) returning id",
-                    new { legalEntityId = body.LegalEntityId, name },
-                    tx,
-                    cancellationToken: ct));
-                await audit.WriteAsync(conn, tx,
-                    new AuditEntry("department.created", "department", id.ToString(), new { name, body.LegalEntityId }), ct);
-                await tx.CommitAsync(ct);
-                return Results.Created($"/api/tenant/departments/{id}", new { id, name, legalEntityId = body.LegalEntityId });
-            }
-            catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
-            {
-                return Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "Department exists",
-                    detail: $"A department named '{name}' already exists for that legal entity.");
-            }
-            catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.ForeignKeyViolation)
-            {
-                return Results.ValidationProblem(new Dictionary<string, string[]>
-                {
-                    ["legalEntityId"] = ["Legal entity not found."],
-                });
-            }
-        });
-
         group.MapGet("/users", async (ITenantConnectionFactory db, CancellationToken ct) =>
         {
             await using var conn = await db.OpenAsync(ct);
             var rows = await conn.QueryAsync<UserRow>(new CommandDefinition(
                 """
-                select u.id, u.email, u.display_name, u.role, d.name as department_name
-                from user_profile u
-                left join department d on d.id = u.department_id
-                order by u.display_name
+                select user_id as id, email, display_name
+                from user_profile
+                order by display_name
                 """,
                 cancellationToken: ct));
             return Results.Ok(rows);
@@ -133,8 +63,6 @@ public static class TenantEndpoints
     }
 }
 
-public sealed record CreateDepartmentRequest(string? Name, Guid? LegalEntityId);
-
 internal sealed class TenantSettingsRow
 {
     public Guid TenantId { get; set; }
@@ -146,26 +74,7 @@ internal sealed class TenantSettingsRow
 
 internal sealed class TenantCountsRow
 {
-    public long LegalEntities { get; set; }
-    public long Departments { get; set; }
     public long Users { get; set; }
-}
-
-internal sealed class LegalEntityRow
-{
-    public Guid Id { get; set; }
-    public string Name { get; set; } = "";
-    public string? TaxId { get; set; }
-    public string Country { get; set; } = "";
-    public string FunctionalCurrency { get; set; } = "";
-}
-
-internal sealed class DepartmentRow
-{
-    public Guid Id { get; set; }
-    public string Name { get; set; } = "";
-    public Guid? LegalEntityId { get; set; }
-    public string? LegalEntityName { get; set; }
 }
 
 internal sealed class UserRow
@@ -173,8 +82,6 @@ internal sealed class UserRow
     public Guid Id { get; set; }
     public string Email { get; set; } = "";
     public string DisplayName { get; set; } = "";
-    public string Role { get; set; } = "";
-    public string? DepartmentName { get; set; }
 }
 
 internal sealed class AuditRow

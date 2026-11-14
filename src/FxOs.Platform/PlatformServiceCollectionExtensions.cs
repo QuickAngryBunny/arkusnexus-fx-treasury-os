@@ -1,10 +1,14 @@
 using Dapper;
 using FxOs.Platform.Audit;
 using FxOs.Platform.Data;
+using FxOs.Platform.Email;
+using FxOs.Platform.Identity;
 using FxOs.Platform.Secrets;
 using FxOs.Platform.Tenancy;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
 namespace FxOs.Platform;
@@ -54,6 +58,31 @@ public static class PlatformServiceCollectionExtensions
         services.AddSingleton<ControlPlaneStore>();
         services.AddSingleton<TenantDataSources>();
         services.AddSingleton<TenantProvisioner>();
+        services.AddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton(IdentityOptions.Default);
+        services.AddSingleton<IdentityStore>();
+        services.AddSingleton(SessionOptions.Default);
+        services.AddSingleton<SessionStore>();
+        services.AddSingleton<SignInService>();
+        services.AddSingleton<PasswordResetService>();
+        services.AddSingleton<DevAccountService>();
+
+        // The web app's address, for links in emails. Always ends with "/" so relative paths append.
+        var publicBase = configuration["App:PublicBaseUrl"] ?? "http://localhost:3000/";
+        services.AddSingleton(new AppLinks(new Uri(publicBase.EndsWith('/') ? publicBase : publicBase + "/")));
+
+        // Email: outbox (encrypted bodies) -> dispatcher -> Firebase Trigger Email `mail` collection.
+        var email = configuration.GetSection(EmailSettings.Section).Get<EmailSettings>() ?? new EmailSettings();
+        services.AddSingleton(email);
+        services.AddDataProtection().SetApplicationName("FxOs");
+        services.AddSingleton<EmailOutbox>();
+        services.TryAddSingleton<IMailTransport, FirestoreMailTransport>();
+        services.AddSingleton<EmailDispatcher>();
+        if (email.Dispatcher.Enabled && email.Firebase.IsConfigured)
+        {
+            services.AddHostedService<EmailDispatcherService>();
+        }
         services.AddSingleton<TenantMigrationService>();
 
         services.AddScoped<TenantContext>();

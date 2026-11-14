@@ -2,6 +2,8 @@
 
   <PropertyGroup>
     <RootNamespace>FxOs.Api</RootNamespace>
+    <!-- Local-only settings (Firebase key path, test recipients): dotnet user-secrets, never the repo. -->
+    <UserSecretsId>fxos-api-local</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
