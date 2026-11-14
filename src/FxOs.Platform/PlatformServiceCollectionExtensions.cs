@@ -6,6 +6,7 @@ using FxOs.Platform.Secrets;
 using FxOs.Platform.Tenancy;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
 namespace FxOs.Platform;
@@ -56,6 +57,9 @@ public static class PlatformServiceCollectionExtensions
         services.AddSingleton<TenantDataSources>();
         services.AddSingleton<TenantProvisioner>();
         services.AddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton(IdentityOptions.Default);
+        services.AddSingleton<IdentityStore>();
         services.AddSingleton<TenantMigrationService>();
 
         services.AddScoped<TenantContext>();

@@ -103,6 +103,12 @@ MFA/two-step verification.
   call `VerifyAgainstDummy` for unknown emails so timing doesn't reveal accounts. Input is NFC-normalised.
   `PasswordPolicy.Check` returns rule codes `min_length` (12), `max_length` (128), `number`, `symbol`; lengths count
   visible characters. The web forms must mirror these codes for the live checks.
+  `SecureToken` (32 random bytes, 43-char base64url raw; SHA-256 stored) and `IdentityStore` (control plane, uses
+  `TimeProvider`): invitations 7 days (resend revokes the open one; refused if the email is already an active member;
+  accept creates or links the account — an existing password is kept — and adds/reactivates the membership; refused for
+  non-active tenants), password reset 1 hour (clears the lock, ends all sessions), email change 24 hours (refused if the
+  address is taken), 5 failed sign-ins → 15-minute lock. Links are single use (row lock on claim). Every change writes
+  `control_audit_log` (`ControlAudit`) in the same transaction; raw tokens never reach the database or the audit log.
 - Forecast rule: publish every model's backtest next to the naive benchmark; do not present a model as better than
   naive unless `mae_vs_naive` < 1 for that horizon.
 - Phase 0 sprint 3 (moved to the DevOps hand-off): Azure internal environment, deploy workflow running per-tenant
