@@ -30,6 +30,30 @@ public sealed class DevAccountTests(PlatformFixture fx)
     }
 
     [Fact]
+    public async Task Set_by_reset_leaves_no_known_password_and_the_reset_link_sets_it()
+    {
+        var tenant = await fx.ProvisionAsync("devreset");
+        var email = $"boss_{Guid.NewGuid():N}@example.test";
+
+        var created = await Service.SetAsync(tenant.Slug, email, "Bea Boss", "admin", password: null, platformAdmin: true);
+        Assert.True(created.Ok, created.Message);
+        Assert.Contains("Forgot password", created.Message, StringComparison.Ordinal);
+
+        await using (var conn = await fx.Services.GetRequiredService<FxOs.Platform.Data.ControlPlaneDb>().OpenAsync())
+        {
+            Assert.True(await Dapper.SqlMapper.ExecuteScalarAsync<bool>(conn,
+                "select is_platform_admin from user_account where id = @id", new { id = created.UserId }));
+        }
+
+        // Forgot password works for this account (it has a hash, just not one anybody knows).
+        var forgot = await fx.Client().PostAsJsonAsync("/api/auth/password/forgot", new { email, locale = "en-US" });
+        Assert.Equal(HttpStatusCode.Accepted, forgot.StatusCode);
+        await using var check = await fx.Services.GetRequiredService<FxOs.Platform.Data.ControlPlaneDb>().OpenAsync();
+        Assert.Equal(1L, await Dapper.SqlMapper.ExecuteScalarAsync<long>(check,
+            "select count(*) from email_outbox where to_email = @email and template = 'password_reset'", new { email }));
+    }
+
+    [Fact]
     public async Task Real_data_tenants_are_refused()
     {
         var slug = $"real_{Guid.NewGuid():N}"[..14];

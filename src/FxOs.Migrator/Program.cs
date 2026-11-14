@@ -10,7 +10,9 @@ using Microsoft.Extensions.Hosting;
 //   dotnet run --project src/FxOs.Migrator -- provision <slug> "<name>" create or repair a dummy tenant
 //   dotnet run --project src/FxOs.Migrator -- list                      list tenants and schema versions
 //   dotnet run --project src/FxOs.Migrator -- dev-user <slug> <email> "<name>" [admin|approver|standard]
-//                                                                       sign-in for a dummy tenant; asks for the password
+//                                              [--platform-admin] [--set-by-reset]
+//                                                                       sign-in for a dummy tenant; asks for the password,
+//                                                                       or with --set-by-reset you set it via "Forgot password?"
 
 var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
 {
@@ -74,14 +76,16 @@ switch (command)
         var positional = args.Where(a => !a.StartsWith('-')).ToArray();
         if (positional.Length < 4)
         {
-            Console.Error.WriteLine("Usage: dev-user <slug> <email> \"<name>\" [admin|approver|standard]");
+            Console.Error.WriteLine("Usage: dev-user <slug> <email> \"<name>\" [admin|approver|standard] [--platform-admin] [--set-by-reset]");
             return 2;
         }
 
         // Typed (hidden) or piped; never an argument, so it stays out of shell history.
-        var password = ReadPassword("Password (12+ characters, a number and a symbol): ");
+        var setByReset = args.Contains("--set-by-reset");
+        var password = setByReset ? null : ReadPassword("Password (12+ characters, a number and a symbol): ");
         var result = await services.GetRequiredService<DevAccountService>().SetAsync(
-            positional[1], positional[2], positional[3], positional.Length > 4 ? positional[4] : MembershipRole.Admin, password, cts.Token);
+            positional[1], positional[2], positional[3], positional.Length > 4 ? positional[4] : MembershipRole.Admin, password,
+            platformAdmin: args.Contains("--platform-admin"), cts.Token);
         (result.Ok ? Console.Out : Console.Error).WriteLine(result.Message);
         return result.Ok ? 0 : 1;
     }

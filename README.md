@@ -51,7 +51,9 @@ cd workers/python && .venv/bin/fxworkers rates backfill && .venv/bin/fxworkers c
 # 4. API on http://localhost:5080
 dotnet run --project src/FxOs.Api
 
-# 5. A login for a dummy tenant (asks for the password: 12+ characters, a number and a symbol, not your name)
+# 5. A login for a dummy tenant (asks for the password: 12+ characters, a number and a symbol, not your name).
+#    --set-by-reset: no password now; set it with "Forgot password?" (the email must be in Email:AllowedRecipients).
+#    --platform-admin: also a platform admin (tenant admin portal, Sprint 3).
 dotnet run --project src/FxOs.Migrator -- dev-user demo_norte you@example.test "Your Name" admin
 
 # 6. Web on http://localhost:3000 — sign in with that login
