@@ -30,10 +30,6 @@ body {
 }
 .skip-link:focus { top: 12px; }
 
-.nav-dev { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 0 4px; }
-.tenant-switcher { width: 100%; }
-.tenant-switcher .vi-field { font-size: 12px; font-weight: 700; color: var(--vi-muted); gap: 4px; }
-.tenant-switcher .vi-field__control { height: 44px; font-size: 14px; }
 
 .locale-switch { padding: 0 8px 4px; }
 
@@ -207,13 +203,6 @@ body {
 .fx-chart__ticks .fx-chart__today, .fx-chart__ticks .fx-chart__target { background: var(--vi-white); padding: 0 2px; }
 @media (max-width: 600px) { .fx-chart__ticks .is-mid { display: none; } }
 
-/* Dummy-data label + tenant picker: sidebar on desktop, inside the user menu on narrow screens. */
-.nav-dev--menu { display: none; }
-@media (max-width: 900px) {
-  .nav-dev--sidebar { display: none; }
-  .nav-dev--menu { display: flex; padding: 8px 12px 12px; margin-bottom: 4px; border-bottom: 1px solid var(--vi-line); }
-}
-
 /* Forecast hover: high / expected / low at the dots, in the chart's colours */
 .fx-fan-tip { position: absolute; inset: 0; pointer-events: none; }
 .fx-fan-tip__date {
@@ -349,19 +338,6 @@ body {
 .drawer-next ol { margin: 0; padding-left: 20px; line-height: 1.6; color: var(--vi-ink-2); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
-/* Tenant menu (A-05): trigger above the user card, list opens upward. */
-.tenant-menu { position: relative; width: 100%; }
-.tenant-menu__trigger {
-  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 6px 10px; box-sizing: border-box;
-  border: 1.5px solid var(--vi-line); border-radius: var(--vi-radius-lg); background: var(--vi-white); color: var(--vi-ink);
-  font: inherit; text-align: left; cursor: pointer;
-}
-.tenant-menu__trigger:focus-visible { outline: none; box-shadow: var(--vi-focus); }
-.tenant-menu__panel {
-  position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); z-index: 30; padding: 8px;
-  border-radius: 20px; background: var(--vi-white); box-shadow: 0 20px 50px -20px rgb(62 31 85 / 45%);
-}
-.nav-dev .tenant-menu, .nav-dev .vi-tenants { align-self: stretch; }
 
 /* ── Phase 3 forms: onboarding (O-03, O-04), settings (U-01–U-03, C-01, T-01), join (T-05) ── */
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }

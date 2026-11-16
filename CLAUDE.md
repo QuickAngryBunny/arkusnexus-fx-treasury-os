@@ -146,7 +146,9 @@ MFA/two-step verification.
   clear_dummy [worker]) and tenant status `deleted`. `TenantAdminService` + `/api/admin/*`; `TenantSetupRunner` hosted in
   the API (`Platform:RunTenantSetup`, off in tests). Sessions may have no company (platform admin, portal only);
   `CompanyAccess`: memberships + (platform admins) active dummy tenants, never real-data ones without a membership.
-  Tenant menu (A-05/A-06) from `/api/auth/companies`, switch with `/api/auth/session/company`. Migrator `platform-admin`.
+  Company switching in the app shell (A-05/A-06) was removed 2026-11-16: people switch company by signing in (sign-in lands
+  in the company used last); platform admins open `/admin` by URL. The API (`/api/auth/companies`, `/api/auth/session/company`)
+  stays. Migrator `platform-admin`.
   Default platform admin: the owner's work email (set locally; not stored in the repo). Prototype text "No sign-in until
   Phase 6" is outdated; the portal uses the app's sign-in.
   Sprints 4–6 (onboarding, team, settings): tenant V0010 `company_confirmed_at`. API: `InvitationFlow` (describe /
