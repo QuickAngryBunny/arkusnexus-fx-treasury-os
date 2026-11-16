@@ -28,12 +28,15 @@ app.UseMiddleware<TenantResolutionMiddleware>();
 app.MapHealthEndpoints();
 app.MapAuthEndpoints();
 app.MapAdminEndpoints();
+app.MapAccountEndpoints();
 if (settings.DevTenantSwitcherEnabled)
 {
     app.MapDevEndpoints();
 }
 
 app.MapTenantEndpoints();
+app.MapCompanyEndpoints();
+app.MapTeamEndpoints();
 app.MapRateEndpoints();
 app.MapForecastEndpoints();
 app.MapRateHistoryEndpoints();

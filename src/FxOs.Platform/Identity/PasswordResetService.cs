@@ -19,6 +19,16 @@ public sealed class AppLinks(Uri publicBaseUrl)
     public Uri TenantSetup(string rawToken) => new(Base, "setup?token=" + Uri.EscapeDataString(rawToken));
 
     public Uri Admin => new(Base, "admin");
+
+    /// <summary>A teammate's invitation (T-04 → T-05).</summary>
+    public Uri Join(string rawToken) => new(Base, "join?token=" + Uri.EscapeDataString(rawToken));
+
+    /// <summary>Confirms a new sign-in email (U-01).</summary>
+    public Uri ConfirmEmail(string rawToken) => new(Base, "confirm-email?token=" + Uri.EscapeDataString(rawToken));
+
+    public Uri Team => new(Base, "settings/team");
+
+    public Uri Dashboard => Base;
 }
 
 public enum ResetOutcome

@@ -90,6 +90,24 @@ public sealed class PlatformFixture : IAsyncLifetime
         return (userId, email, session.RawToken);
     }
 
+    /// <summary>The newest queued email of a template to an address, decrypted as the dispatcher would (or null).</summary>
+    public async Task<string?> EmailBodyAsync(string to, string template)
+    {
+        await using var conn = await Services.GetRequiredService<ControlPlaneDb>().OpenAsync();
+        var body = await Dapper.SqlMapper.ExecuteScalarAsync<string?>(conn,
+            "select body_protected from email_outbox where to_email = @to and template = @template order by created_at desc limit 1",
+            new { to = to.ToLowerInvariant(), template });
+        return body is null
+            ? null
+            : Microsoft.AspNetCore.DataProtection.DataProtectionCommonExtensions.Unprotect(
+                Services.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>()
+                    .CreateProtector(FxOs.Platform.Email.EmailOutbox.ProtectorPurpose), body);
+    }
+
+    /// <summary>The 43-character token from a link like ".../join?token=…" in an email body.</summary>
+    public static string LinkToken(string body, string path) =>
+        System.Text.RegularExpressions.Regex.Match(body, path + @"\?token=([A-Za-z0-9_-]{43})").Groups[1].Value;
+
     public static HttpRequestMessage Authed(HttpMethod method, string url, string token, object? json = null)
     {
         var request = Request(method, url, tenant: null, json);

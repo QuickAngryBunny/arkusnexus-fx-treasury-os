@@ -69,6 +69,9 @@ public static class PlatformServiceCollectionExtensions
         services.AddSingleton<PasswordResetService>();
         services.AddSingleton<DevAccountService>();
         services.AddSingleton<TenantAdminService>();
+        services.AddSingleton<InvitationFlow>();
+        services.AddSingleton<TeamService>();
+        services.AddSingleton<AccountService>();
         services.AddSingleton<TenantSetupRunner>();
 
         // The web app's address, for links in emails. Always ends with "/" so relative paths append.

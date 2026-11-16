@@ -115,6 +115,11 @@ public sealed class TenantAccountsSchemaTests(PlatformFixture fx)
         await using var conn = await fx.OpenTenantAsync(tenant);
         const string Complete = "update tenant_settings set onboarding_completed_at = now() where id = 1";
 
+        // V0010: the organization step comes first.
+        var early = await Assert.ThrowsAsync<PostgresException>(() => conn.ExecuteAsync(Complete));
+        Assert.Equal(CheckViolation, early.SqlState);
+        await conn.ExecuteAsync("update tenant_settings set company_confirmed_at = now() where id = 1");
+
         var mxn = await AddBankAsync(conn, "Banco Peso", "MXN");
         var noUsd = await Assert.ThrowsAsync<PostgresException>(() => conn.ExecuteAsync(Complete));
         Assert.Equal(CheckViolation, noUsd.SqlState);

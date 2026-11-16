@@ -19,6 +19,13 @@ public static class TenantEndpoints
             var counts = await conn.QuerySingleAsync<TenantCountsRow>(new CommandDefinition(
                 "select count(*) as users from user_profile",
                 cancellationToken: ct));
+            var onboarding = await conn.QuerySingleAsync<(DateTime? Company, DateTime? Completed)>(new CommandDefinition(
+                "select company_confirmed_at, onboarding_completed_at from tenant_settings where id = 1", cancellationToken: ct));
+            var me = tenant.Principal is { } who
+                ? await conn.QuerySingleOrDefaultAsync<(string Language, string NumberFormat, string TimeZone)?>(new CommandDefinition(
+                    "select language, number_format, time_zone from user_profile where user_id = @id", new { id = who.UserId },
+                    cancellationToken: ct))
+                : null;
 
             return Results.Ok(new
             {
@@ -29,6 +36,9 @@ public static class TenantEndpoints
                 settings.Locale,
                 settings.TimeZone,
                 counts,
+                role = tenant.Principal?.Role,
+                onboarding = new { companyConfirmed = onboarding.Company is not null, completed = onboarding.Completed is not null },
+                me = me is { } m ? new { language = m.Language, numberFormat = m.NumberFormat, timeZone = m.TimeZone } : null,
             });
         });
 

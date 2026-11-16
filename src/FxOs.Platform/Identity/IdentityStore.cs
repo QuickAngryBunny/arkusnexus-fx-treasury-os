@@ -67,7 +67,15 @@ public enum AcceptOutcome
     TenantUnavailable,
 }
 
-public sealed record AcceptResult(AcceptOutcome Outcome, TokenState LinkState, Guid? UserId = null, bool NewAccount = false);
+/// <param name="PasswordSetHere">True when this link set the account's password (new account, or one without a
+/// password yet). Only then may the caller sign the person in: an existing password must be typed at sign-in.</param>
+public sealed record AcceptResult(
+    AcceptOutcome Outcome, TokenState LinkState, Guid? UserId = null, bool NewAccount = false, bool PasswordSetHere = false);
+
+/// <summary>What was accepted, for work done in the same transaction (session, emails).</summary>
+public sealed record AcceptedInvitation(
+    Guid InvitationId, Guid TenantId, string Kind, string Email, string DisplayName, string Role, Guid? InvitedBy,
+    Guid UserId, bool NewAccount, bool PasswordSetHere);
 
 public enum AccountTokenOutcome
 {
@@ -203,8 +211,15 @@ public sealed class IdentityStore(ControlPlaneDb controlPlane, TimeProvider time
     /// Uses an invitation: creates the account (password required) or links an existing one (its password is kept),
     /// then adds or reactivates the membership with the invited role. Single use; safe against double submits.
     /// </summary>
+    public Task<AcceptResult> AcceptInvitationAsync(
+        string? rawToken, string? passwordHash, string? displayName = null, CancellationToken ct = default) =>
+        AcceptInvitationAsync(rawToken, passwordHash, displayName, null, ct);
+
+    /// <summary>As above; <paramref name="onAccepted"/> runs in the same transaction (session, emails).</summary>
     public async Task<AcceptResult> AcceptInvitationAsync(
-        string? rawToken, string? passwordHash, string? displayName = null, CancellationToken ct = default)
+        string? rawToken, string? passwordHash, string? displayName,
+        Func<NpgsqlConnection, NpgsqlTransaction, AcceptedInvitation, CancellationToken, Task>? onAccepted,
+        CancellationToken ct = default)
     {
         var hash = SecureToken.TryHash(rawToken);
         if (hash is null)
@@ -239,6 +254,7 @@ public sealed class IdentityStore(ControlPlaneDb controlPlane, TimeProvider time
         var name = string.IsNullOrWhiteSpace(displayName) ? invitation.DisplayName : displayName.Trim();
         Guid userId;
         var newAccount = false;
+        var passwordSetHere = false;
         if (account.Id == Guid.Empty)
         {
             if (string.IsNullOrEmpty(passwordHash))
@@ -254,6 +270,7 @@ public sealed class IdentityStore(ControlPlaneDb controlPlane, TimeProvider time
                 """,
                 new { email = invitation.Email, name, passwordHash, now = now.UtcDateTime }, tx, ct);
             newAccount = true;
+            passwordSetHere = true;
         }
         else
         {
@@ -272,6 +289,7 @@ public sealed class IdentityStore(ControlPlaneDb controlPlane, TimeProvider time
                     where id = @userId
                     """,
                     new { passwordHash, now = now.UtcDateTime, name, userId }, tx, ct);
+                passwordSetHere = true;
             }
         }
 
@@ -291,9 +309,15 @@ public sealed class IdentityStore(ControlPlaneDb controlPlane, TimeProvider time
 
         await ControlAudit.WriteAsync(conn, tx, ControlActor.User(userId), "invitation.accepted", invitation.TenantId,
             "invitation", invitation.Id.ToString(), new { invitation.Kind, invitation.Role, newAccount }, ct);
+        if (onAccepted is not null)
+        {
+            await onAccepted(conn, tx, new AcceptedInvitation(invitation.Id, invitation.TenantId, invitation.Kind, invitation.Email,
+                name, invitation.Role, invitation.InvitedBy, userId, newAccount, passwordSetHere), ct);
+        }
+
         await tx.CommitAsync(ct);
 
-        return new AcceptResult(AcceptOutcome.Accepted, TokenState.Valid, userId, newAccount);
+        return new AcceptResult(AcceptOutcome.Accepted, TokenState.Valid, userId, newAccount, passwordSetHere);
     }
 
     /// <summary>Cancels an open invitation (Team row menu). Returns false when it was already used, revoked or unknown.</summary>
@@ -331,6 +355,12 @@ public sealed class IdentityStore(ControlPlaneDb controlPlane, TimeProvider time
         NpgsqlConnection conn, NpgsqlTransaction tx, Guid userId, CancellationToken ct = default) =>
         IssueAccountTokenAsync(conn, tx, userId, AccountTokenPurpose.PasswordReset, null, options.PasswordResetLifetime,
             ControlActor.Anonymous, ct);
+
+    /// <summary>Same, inside the caller's transaction (so the confirmation email is enqueued with it).</summary>
+    public Task<IssuedToken> IssueEmailChangeAsync(
+        NpgsqlConnection conn, NpgsqlTransaction tx, Guid userId, string newEmail, CancellationToken ct = default) =>
+        IssueAccountTokenAsync(conn, tx, userId, AccountTokenPurpose.EmailChange, NormalizeEmail(newEmail),
+            options.EmailChangeLifetime, ControlActor.User(userId), ct);
 
     /// <summary>Issues a confirmation link for a new email address (24 hours). An open one for the user is revoked.</summary>
     public Task<IssuedToken> IssueEmailChangeAsync(Guid userId, string newEmail, CancellationToken ct = default) =>
