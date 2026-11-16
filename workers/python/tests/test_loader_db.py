@@ -4,6 +4,7 @@
 import datetime as dt
 import json
 import os
+import re
 import uuid
 from decimal import Decimal
 from pathlib import Path
@@ -27,8 +28,15 @@ def tenant_db():
         admin.execute(f'create database "{name}"')
     try:
         with psycopg.connect(make_conninfo(DSN, dbname=name)) as conn:
+            # Same rule as the .NET runner: without TimescaleDB (Cloud SQL) its two statements are skipped.
+            timescale = conn.execute(
+                "select exists (select 1 from pg_available_extensions where name = 'timescaledb')").fetchone()[0]
             for path in sorted(MIGRATIONS.glob("V*.sql")):
-                conn.execute(path.read_text(encoding="utf-8"))
+                sql = path.read_text(encoding="utf-8")
+                if not timescale:
+                    sql = re.sub(r"(?im)^\s*create extension if not exists timescaledb\s*;[^\S\n]*$", "", sql)
+                    sql = re.sub(r"(?im)^\s*select create_hypertable\([^;]*\)\s*;[^\S\n]*$", "", sql)
+                conn.execute(sql)
             conn.execute("insert into tenant_settings (id, tenant_id, display_name) values (1, %s, 'Test')",
                          (uuid.uuid4(),))
             conn.commit()

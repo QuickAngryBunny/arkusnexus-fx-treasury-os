@@ -36,3 +36,67 @@ def test_list_returns_a_series_keys_in_fetch_order(tmp_path):
 
     assert store.list("banxico/SF43718/") == [first.key, later.key]
     assert store.list("nothing/here/") == []
+
+
+class _FakeBlob:
+    def __init__(self, bucket, name):
+        self.bucket, self.name, self.metadata = bucket, name, None
+
+    def upload_from_string(self, data, content_type=None, if_generation_match=None):
+        assert if_generation_match == 0
+        if self.name in self.bucket.objects:
+            raise FileExistsError(self.name)  # Cloud Storage answers 412 Precondition Failed
+        self.bucket.objects[self.name] = data
+
+    def download_as_bytes(self):
+        return self.bucket.objects[self.name]
+
+
+class _FakeBucket:
+    def __init__(self):
+        self.objects = {}
+
+    def blob(self, name):
+        return _FakeBlob(self, name)
+
+    def list_blobs(self, prefix=""):
+        return [_FakeBlob(self, n) for n in self.objects if n.startswith(prefix)]
+
+
+class _FakeClient:
+    def __init__(self):
+        self.buckets = {}
+
+    def bucket(self, name):
+        return self.buckets.setdefault(name, _FakeBucket())
+
+
+def test_cloud_storage_keeps_keys_under_its_prefix_and_never_overwrites():
+    from fxworkers.rates.raw_store import GcsRawStore
+
+    client = _FakeClient()
+    store = GcsRawStore("fx-raw", "rates/", client=client)
+    store.put("banxico/SF43718/a.json", b"{}", {"sha256": "x"})
+    store.put("banxico/SF43718/b.json", b"[]", {})
+    assert set(client.buckets["fx-raw"].objects) == {"rates/banxico/SF43718/a.json", "rates/banxico/SF43718/b.json"}
+    assert store.list("banxico/SF43718/") == ["banxico/SF43718/a.json", "banxico/SF43718/b.json"]
+    assert store.get("banxico/SF43718/a.json") == b"{}"
+    import pytest
+
+    with pytest.raises(FileExistsError):
+        store.put("banxico/SF43718/a.json", b"changed", {})
+
+
+def test_a_gs_url_selects_cloud_storage(monkeypatch):
+    import fxworkers.rates.raw_store as rs
+
+    seen = {}
+    monkeypatch.setattr(rs, "GcsRawStore", lambda bucket, prefix: seen.update(bucket=bucket, prefix=prefix) or "gcs")
+    monkeypatch.delenv("FX_RAW_STORE_DIR", raising=False)
+    monkeypatch.setenv("FX_RAW_STORE_URL", "gs://fx-raw/rates")
+    assert rs.open_store() == "gcs" and seen == {"bucket": "fx-raw", "prefix": "rates"}
+    monkeypatch.setenv("FX_RAW_STORE_URL", "s3://nope")
+    import pytest
+
+    with pytest.raises(ValueError):
+        rs.open_store()

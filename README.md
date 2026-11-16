@@ -12,7 +12,7 @@ verification are out of scope ([Phase 3 brief](docs/phase-3-brief.md)).
 ## Architecture in one paragraph
 
 A Next.js web app talks only to a .NET 10 API (modular monolith). The API resolves the tenant on each request and
-opens **only that tenant's own PostgreSQL + TimescaleDB database** ([ADR 0001](docs/decisions/0001-database-per-tenant.md)).
+opens **only that tenant's own PostgreSQL database** ([ADR 0001](docs/decisions/0001-database-per-tenant.md)).
 A small control-plane database (`fx_control`) holds tenants and database routing. Python workers seed dummy data now
 and load exchange rates from Phase 1.
 
@@ -206,7 +206,26 @@ Trigger Email extension needed these by hand, all for `426189336240-compute@deve
 "Cloud Build Service Account" on the project (function build), and "Cloud Run Invoker" on the service
 `ext-firestore-send-email-hvmf-processqueue` (the Eventarc trigger calls it). Extension settings: Firestore `(default)`
 in `nam5`, collection `mail`, SMTP via the sending Gmail account with an app password in Secret Manager.
-For Azure (DevOps hand-off): use Workload Identity Federation for the sender account instead of a key.
+Hosted on Google Cloud, the API's Cloud Run service account sends directly (no key, no impersonation).
+
+## Hosting on Firebase / Google Cloud (prepared, not deployed)
+
+Development runs locally. What's ready for hosting:
+
+| Piece | Where it runs | In the repo |
+|---|---|---|
+| Next.js app | Firebase App Hosting (root directory `apps/web`) | `apps/web/apphosting.yaml` (`FX_API_BASE_URL`) |
+| .NET API | Cloud Run, internal ingress | `docker build -f deploy/api.Dockerfile --target api .` |
+| Migrator | Cloud Run job before each release (`control`, then `tenants`) | `--target migrator` |
+| Python workers | Cloud Run jobs / service (`fxworkers …`) | `docker build -f deploy/workers.Dockerfile .` |
+| Databases | Cloud SQL for PostgreSQL 17 (no TimescaleDB: those statements are skipped) | `CloudSqlCompatibilityTests` |
+| Raw store | Cloud Storage | `FX_RAW_STORE_URL=gs://bucket/prefix` |
+| Tenant DB passwords | Secret Manager | `Secrets__Provider=google`, `Secrets__Google__ProjectId` |
+| Email | Firebase Trigger Email (as today) | `Email__Firebase__ProjectId` |
+
+A non-internal `ASPNETCORE_ENVIRONMENT` (e.g. `Production`) refuses to start without Secret Manager or with the dev
+tenant switcher on. Settings are environment variables (`ConnectionStrings__ControlPlane`, `TenantServers__default`,
+`App__PublicBaseUrl`, …); Google credentials come from each service's account (Application Default Credentials).
 
 ## Violeta UI (`packages/ui`)
 
@@ -222,7 +241,7 @@ Text lives in `apps/web/messages/es-MX.json` and `en-US.json`. The language come
 
 ```bash
 dotnet test FxOs.slnx                 # needs Docker (Testcontainers)
-cd workers/python && pytest -q        # loader tests also need FX_TEST_PG_DSN (any Postgres+TimescaleDB superuser DSN)
+cd workers/python && pytest -q        # loader tests also need FX_TEST_PG_DSN (any PostgreSQL superuser DSN; TimescaleDB optional)
 pnpm -r typecheck                     # packages/ui + apps/web; also checks ES/EN catalogs have the same keys
 ```
 
@@ -245,7 +264,7 @@ rejected without a tenant.
   dummy-data seeder; developer tenant switcher; audit log writer; isolation tests; CI.
 - [x] **Sprint 2** — Violeta component library in `packages/ui` (Button, Badge, Field, Switch, Segmented, StatCard,
   AlertBanner, PageHeader, Breadcrumb, AppNav with user menu) and the app shell; message catalogs for ES/EN.
-- [ ] **Sprint 3** — Azure environments (internal network only), deploy workflow with per-tenant migrations,
+- [ ] **Sprint 3** — Google Cloud environments (internal network only), deploy workflow with per-tenant migrations,
   OpenTelemetry tagged with tenant id, Grafana dashboards, split migration owner vs app role.
 
 The build plan lives in the project docs ("FX Intelligence & Treasury OS — Web App Build Plan").

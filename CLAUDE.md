@@ -17,20 +17,27 @@ MFA/two-step verification.
 
 ## Rollout rules (do not break)
 - Phases 0–2: internal environment only, dummy tenants and dummy company data. Only public exchange rates are real.
-- Development runs locally until the last phase; the DevOps developer then deploys to Azure. Don't build Azure infra
-  (private network, Key Vault provisioning, backups, deploy workflows); keep seams like `ISecretStore` for them.
-- Phase 3 gate (private network only, backups, encryption, Key Vault, restore drill, security review) is part of that
-  hand-off. Sign-in is the app's own email + password (Argon2id/bcrypt hash in the control plane, HTTP-only session
+- Hosting target (changed 2026-11-16): Firebase on Google Cloud, not Azure. App Hosting for the Next.js app
+  (`apps/web/apphosting.yaml`), Cloud Run for the API (`deploy/api.Dockerfile`, target `api`), the Migrator (target
+  `migrator`, a job before each release) and the Python workers (`deploy/workers.Dockerfile`), Cloud SQL for PostgreSQL,
+  Cloud Storage for the raw store (`FX_RAW_STORE_URL=gs://…`), Secret Manager (`Secrets:Provider=google`,
+  `Secrets:Google:ProjectId`; any non-internal environment requires it and refuses the dev switcher). Development
+  still runs locally (through Phase 4); don't provision cloud resources (projects, networks, buckets, deploy workflows).
+- Cloud SQL has no TimescaleDB: the migration runner skips `create extension … timescaledb` and `create_hypertable(…)`
+  on a server without it (`CloudSqlCompatibilityTests` runs every migration on plain PostgreSQL 17). New migrations must
+  be plain PostgreSQL; no Timescale functions in queries. Locally the Timescale image still works.
+- Phase 3 gate (private network only, backups, encryption, Secret Manager, restore drill, security review) comes with
+  the hosting work. Sign-in is the app's own email + password (Argon2id/bcrypt hash in the control plane, HTTP-only session
   cookies, 15-minute lock). No MFA, no outside identity provider. Tenants are created by internal tenant admins (no self-serve sign-up).
   Arkus Nexus loads real data only after the gate passes.
 - Roles per tenant membership: `admin`, `approver`, `standard`. Only admins see Team, invite, change roles, edit banks.
 - Email: Firebase is only the sender (Trigger Email extension, Firestore `mail` collection). Firebase does no auth and
   holds no user data. Locally the API writes to the real Firebase project (test addresses only); the service-account
-  key stays outside the repo (Key Vault after the hand-off).
+  key stays outside the repo (hosted: the Cloud Run service account, no key).
 - Alerts belong to conversion plans (Phase 4); AI in Phase 5. LLM: Azure OpenAI, GPT‑6.1 Terra (Phase 5).
 
 ## Architecture (ADR 0001: docs/decisions/0001-database-per-tenant.md)
-- One PostgreSQL + TimescaleDB database and login role per tenant, including its own copy of rate history.
+- One PostgreSQL database (Cloud SQL hosted; TimescaleDB image locally) and login role per tenant, including its own copy of rate history.
   Control plane (`fx_control`) holds only tenants, routing, schema version, and (Phase 3) identities, memberships,
   invitations, password resets and sessions. Store only token hashes, never raw tokens.
 - Web (Next.js) → .NET 10 API only; the browser never calls the API directly (server components/actions).
@@ -164,6 +171,6 @@ MFA/two-step verification.
   stays Mexico City); approval-request notifications are listed/settable for approvers and admins only.
 - Forecast rule: publish every model's backtest next to the naive benchmark; do not present a model as better than
   naive unless `mae_vs_naive` < 1 for that horizon.
-- Phase 0 sprint 3 (moved to the DevOps hand-off): Azure internal environment, deploy workflow running per-tenant
+- Phase 0 sprint 3 (moved to the hosting work): Google Cloud internal environment, deploy workflow running per-tenant
   migrations, OpenTelemetry (tenant id tag), Grafana. Split migration-owner vs app role is still ours, before real data.
 - Housekeeping: ~50 analyzer warnings to clear before `TreatWarningsAsErrors`.

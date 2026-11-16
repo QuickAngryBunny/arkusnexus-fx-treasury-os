@@ -1,6 +1,7 @@
 """Immutable raw store: every fetched response is kept byte for byte, so any load can be replayed offline.
 
-Locally this is Azurite (docker-compose); in Azure it is a Blob container. A plain directory works for tests.
+Hosted (Firebase / Google Cloud) this is a Cloud Storage bucket (FX_RAW_STORE_URL=gs://bucket/prefix). Locally it is
+Azurite (docker-compose), and a plain directory works for tests.
 Objects are never overwritten: the key carries the fetch time and the content hash.
 """
 
@@ -86,11 +87,43 @@ class BlobRawStore:
         return sorted(b.name for b in self._container.list_blobs(name_starts_with=prefix))
 
 
+class GcsRawStore:
+    """A Cloud Storage bucket, with Application Default Credentials (the Cloud Run service account)."""
+
+    def __init__(self, bucket: str, prefix: str = "", client=None) -> None:
+        if client is None:
+            from google.cloud import storage  # optional dependency: pip install "fxworkers[gcp]"
+
+            client = storage.Client()
+        self._bucket = client.bucket(bucket)
+        self._prefix = prefix.strip("/") + "/" if prefix.strip("/") else ""
+
+    def put(self, key: str, data: bytes, metadata: dict[str, str]) -> None:
+        blob = self._bucket.blob(self._prefix + key)
+        blob.metadata = metadata
+        # if_generation_match=0: create only, never overwrite (the precondition fails if the object exists).
+        blob.upload_from_string(data, content_type="application/json", if_generation_match=0)
+
+    def get(self, key: str) -> bytes:
+        return self._bucket.blob(self._prefix + key).download_as_bytes()
+
+    def list(self, prefix: str) -> list[str]:
+        start = len(self._prefix)
+        return sorted(b.name[start:] for b in self._bucket.list_blobs(prefix=self._prefix + prefix))
+
+
 def open_store() -> RawStore:
-    """FX_RAW_STORE_DIR → a local directory; otherwise Blob (FX_RAW_STORE_CONNECTION, default Azurite)."""
+    """FX_RAW_STORE_DIR → a local directory; FX_RAW_STORE_URL=gs://bucket[/prefix] → Cloud Storage;
+    otherwise Blob (FX_RAW_STORE_CONNECTION, default Azurite)."""
     directory = os.environ.get("FX_RAW_STORE_DIR")
     if directory:
         return LocalRawStore(Path(directory))
+    url = os.environ.get("FX_RAW_STORE_URL", "")
+    if url:
+        if not url.startswith("gs://") or len(url) <= 5:
+            raise ValueError("FX_RAW_STORE_URL must look like gs://bucket or gs://bucket/prefix")
+        bucket, _, prefix = url[5:].partition("/")
+        return GcsRawStore(bucket, prefix)
     return BlobRawStore(
         os.environ.get("FX_RAW_STORE_CONNECTION", AZURITE),
         os.environ.get("FX_RAW_STORE_CONTAINER", DEFAULT_CONTAINER),
