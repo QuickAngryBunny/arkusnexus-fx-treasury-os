@@ -7,6 +7,8 @@ namespace FxOs.Platform.Identity;
 public sealed record IdentityOptions
 {
     public TimeSpan InvitationLifetime { get; init; } = TimeSpan.FromDays(7);
+    /// <summary>How long after expiring an invitation can still be renewed by its recipient (once).</summary>
+    public TimeSpan InvitationRenewWindow { get; init; } = TimeSpan.FromDays(30);
     public TimeSpan PasswordResetLifetime { get; init; } = TimeSpan.FromHours(1);
     public TimeSpan EmailChangeLifetime { get; init; } = TimeSpan.FromHours(24);
 
@@ -51,11 +53,11 @@ public enum TokenState
 
 public sealed record IssuedToken(Guid Id, string RawToken, DateTimeOffset ExpiresAt);
 
-public sealed record NewInvitation(Guid TenantId, string Kind, string Email, string DisplayName, string Role);
+public sealed record NewInvitation(Guid TenantId, string Kind, string Email, string DisplayName, string Role, Guid? RenewedFrom = null);
 
 public sealed record InvitationView(
     Guid Id, Guid TenantId, string Kind, string Email, string DisplayName, string Role, Guid? InvitedBy,
-    DateTimeOffset ExpiresAt, TokenState State);
+    DateTimeOffset ExpiresAt, TokenState State, Guid? RenewedFrom = null);
 
 public enum AcceptOutcome
 {
@@ -169,8 +171,8 @@ public sealed class IdentityStore(ControlPlaneDb controlPlane, TimeProvider time
         var expiresAt = now + options.InvitationLifetime;
         var id = await conn.ScalarAsync<Guid>(
             """
-            insert into invitation (tenant_id, kind, email, display_name, role, token_hash, invited_by, expires_at, created_at)
-            values (@tenantId, @kind, @email, @displayName, @role, @hash, @invitedBy, @expiresAt, @now)
+            insert into invitation (tenant_id, kind, email, display_name, role, token_hash, invited_by, expires_at, created_at, renewed_from)
+            values (@tenantId, @kind, @email, @displayName, @role, @hash, @invitedBy, @expiresAt, @now, @renewedFrom)
             returning id
             """,
             new
@@ -184,6 +186,7 @@ public sealed class IdentityStore(ControlPlaneDb controlPlane, TimeProvider time
                 invitedBy = actor.UserId,
                 expiresAt = expiresAt.UtcDateTime,
                 now = now.UtcDateTime,
+                renewedFrom = request.RenewedFrom,
             },
             tx, ct);
 
@@ -462,6 +465,16 @@ public sealed class IdentityStore(ControlPlaneDb controlPlane, TimeProvider time
             """,
             new { userId = token.UserId, newEmail = token.NewEmail, now = now.UtcDateTime }, tx, ct);
 
+        // Sign-in moves to the new address: every session ends (the person signs in again with it), and reset links
+        // sent to the old address stop working.
+        await conn.ExecAsync(
+            """
+            update session set revoked_at = @now, revoked_reason = 'email_changed' where user_id = @userId and revoked_at is null;
+            update account_token set revoked_at = @now
+            where user_id = @userId and purpose = 'password_reset' and used_at is null and revoked_at is null;
+            """,
+            new { userId = token.UserId, now = now.UtcDateTime }, tx, ct);
+
         await ControlAudit.WriteAsync(conn, tx, ControlActor.User(token.UserId), "account.email_changed", null,
             "user_account", token.UserId.ToString(), new { oldEmail, newEmail = token.NewEmail }, ct);
         await tx.CommitAsync(ct);
@@ -623,7 +636,7 @@ public sealed class IdentityStore(ControlPlaneDb controlPlane, TimeProvider time
     private sealed class InvitationRow
     {
         public const string Select = """
-            select id, tenant_id, kind, email, display_name, role, invited_by, expires_at, used_at, revoked_at
+            select id, tenant_id, kind, email, display_name, role, invited_by, expires_at, used_at, revoked_at, renewed_from
             from invitation
             """;
 
@@ -637,11 +650,12 @@ public sealed class IdentityStore(ControlPlaneDb controlPlane, TimeProvider time
         public DateTime ExpiresAt { get; set; }
         public DateTime? UsedAt { get; set; }
         public DateTime? RevokedAt { get; set; }
+        public Guid? RenewedFrom { get; set; }
 
         public TokenState StateAt(DateTimeOffset now) => StateOf(UsedAt, RevokedAt, ExpiresAt, now);
 
         public InvitationView ToView(DateTimeOffset now) =>
-            new(Id, TenantId, Kind, Email, DisplayName, Role, InvitedBy, Utc(ExpiresAt)!.Value, StateAt(now));
+            new(Id, TenantId, Kind, Email, DisplayName, Role, InvitedBy, Utc(ExpiresAt)!.Value, StateAt(now), RenewedFrom);
     }
 
     private sealed class AccountTokenRow

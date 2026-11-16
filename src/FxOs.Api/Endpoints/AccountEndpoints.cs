@@ -57,10 +57,15 @@ public static class AccountEndpoints
         {
             var who = await sessions.ValidateAsync(SessionToken.FromRequest(http.Request), ct);
             if (who is null) return Results.Json(new { code = "signed_out" }, statusCode: StatusCodes.Status401Unauthorized);
-            var result = await accounts.RequestEmailChangeAsync(who, body.Email, Locale(body.Locale), ct);
+            var result = await accounts.RequestEmailChangeAsync(who, body.Email, body.CurrentPassword, Locale(body.Locale), ct);
             return result.Ok
                 ? Results.Accepted(value: new { })
-                : Results.Json(new { code = result.Code }, statusCode: result.Code == "email_taken" ? StatusCodes.Status409Conflict : StatusCodes.Status400BadRequest);
+                : Results.Json(new { code = result.Code }, statusCode: result.Code switch
+                {
+                    "email_taken" => StatusCodes.Status409Conflict,
+                    "wrong_password" => StatusCodes.Status403Forbidden,
+                    _ => StatusCodes.Status400BadRequest,
+                });
         });
 
         group.MapPost("/email/confirm", async (TokenBody body, AccountService accounts, CancellationToken ct) =>
@@ -101,4 +106,4 @@ public sealed record TokenBody(string? Token, string? Locale);
 
 public sealed record ChangePasswordBody(string? Current, string? Password, string? Locale);
 
-public sealed record ChangeEmailBody(string? Email, string? Locale);
+public sealed record ChangeEmailBody(string? Email, string? CurrentPassword, string? Locale);

@@ -558,7 +558,7 @@
   "settings.save": "Save changes",
   "settings.saved": "Changes saved.",
   "profile.kicker": "Personal info",
-  "profile.emailHint": "Changing it sends a confirmation link to the new address.",
+  "profile.emailHint": "We send a confirmation link to the new address. Once you confirm, you sign in again everywhere.",
   "profile.emailSent": "Saved. Confirm the change from the link we sent to {email}.",
   "profile.prefs": "Preferences",
   "profile.numberFormat": "Number format",
@@ -663,5 +663,8 @@
   "dash.news.empty": "No news in the last 30 days.",
   "join.invalid.body": "This link was cancelled or isn’t complete. Ask your company admin for a new invitation.",
   "onb.invalid.title": "This setup link isn’t valid",
-  "onb.invalid.body": "It was replaced by a newer one or isn’t complete. Use the latest email or ask your contact at Arkus Nexus."
+  "onb.invalid.body": "It was replaced by a newer one or isn’t complete. Use the latest email or ask your contact at Arkus Nexus.",
+  "profile.passwordHint": "Needed only to change your email.",
+  "profile.passwordNeeded": "Enter your current password to change your email.",
+  "profile.invalidEmail": "Enter a different, valid email address."
 }

@@ -154,12 +154,15 @@ public sealed class TeamAndSettingsTests(PlatformFixture fx)
             Assert.Equal(1L, await conn.ExecuteScalarAsync<long>("select count(*) from notification_preference where user_id = @userId", new { userId }));
         }
 
-        // Password: the current one is required; other sessions end, this one stays.
+        // Password: the current one is required; other sessions end, this one stays, and an open reset link stops working.
+        Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsJsonAsync("/api/auth/password/forgot", new { email, locale = "en-US" })).StatusCode);
+        var resetLink = PlatformFixture.LinkToken((await fx.EmailBodyAsync(email, "password_reset"))!, "reset-password");
         Assert.Equal(HttpStatusCode.BadRequest, (await Post(client, token, "/api/auth/password/change", new { current = "Wrong-pass-26!", password = "Brand-new-pass-26!" })).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await Post(client, token, "/api/auth/password/change", new { current = "Current-pass-26!", password = "Brand-new-pass-26!" })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(PlatformFixture.Authed(HttpMethod.Get, "/api/auth/session", token))).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.SendAsync(PlatformFixture.Authed(HttpMethod.Get, "/api/auth/session", otherToken))).StatusCode);
         Assert.NotNull(await fx.EmailBodyAsync(email, "password_changed"));
+        Assert.Equal("revoked", Str(await Json(await client.GetAsync($"/api/auth/password/reset?token={resetLink}")), "state"));
     }
 
     [Fact]
@@ -173,12 +176,23 @@ public sealed class TeamAndSettingsTests(PlatformFixture fx)
         var client = fx.Client();
         await Put(client, token, "/api/tenant/me", new { displayName = "Test member", language = "es-MX", numberFormat = "period_decimal", timeZone = "America/Mexico_City" });
 
-        Assert.Equal(HttpStatusCode.Conflict, (await Post(client, token, "/api/auth/email/change", new { email = takenEmail })).StatusCode);
-        Assert.Equal(HttpStatusCode.Accepted, (await Post(client, token, "/api/auth/email/change", new { email = newEmail })).StatusCode);
+        // The current password is required, so a session left open somewhere can't move the account.
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(client, token, "/api/auth/email/change", new { email = newEmail })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(client, token, "/api/auth/email/change", new { email = newEmail, currentPassword = "Wrong-pass-26!" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(client, token, "/api/auth/email/change", new { email = takenEmail, currentPassword = "Current-pass-26!" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, (await Post(client, token, "/api/auth/email/change", new { email = newEmail, currentPassword = "Current-pass-26!" })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/auth/sign-in", new { email = oldEmail, password = "Current-pass-26!" })).StatusCode);
+
+        // A reset link sent to the old address before the change.
+        Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsJsonAsync("/api/auth/password/forgot", new { email = oldEmail, locale = "en-US" })).StatusCode);
+        var resetLink = PlatformFixture.LinkToken((await fx.EmailBodyAsync(oldEmail, "password_reset"))!, "reset-password");
 
         var link = PlatformFixture.LinkToken((await fx.EmailBodyAsync(newEmail, "email_change_confirmation"))!, "confirm-email");
         Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/auth/email/confirm", new { token = link })).StatusCode);
+
+        // Every session ends and the old address's reset link stops working.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.SendAsync(PlatformFixture.Authed(HttpMethod.Get, "/api/auth/session", token))).StatusCode);
+        Assert.Equal("revoked", Str(await Json(await client.GetAsync($"/api/auth/password/reset?token={resetLink}")), "state"));
         Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/auth/sign-in", new { email = newEmail, password = "Current-pass-26!" })).StatusCode);
         Assert.Equal(HttpStatusCode.Gone, (await client.PostAsJsonAsync("/api/auth/email/confirm", new { token = link })).StatusCode);
 

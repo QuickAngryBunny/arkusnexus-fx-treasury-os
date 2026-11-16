@@ -12,10 +12,14 @@ export type SignInState = {
   lockedUntil?: string;
 };
 
-/** Only same-site paths, so ?next= can't send someone to another site after sign-in. */
+/**
+ * Where to go after sign-in: a path on this site only, so ?next= can't send someone elsewhere. Rejects "//host", "/\\host" and any backslash or control
+ * character (browsers drop tabs and newlines, so "/\t/host" would become "//host").
+ */
 function safeNext(value: FormDataEntryValue | null): string {
   const next = typeof value === "string" ? value : "";
-  return next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : "/";
+  // eslint-disable-next-line no-control-regex
+  return /^\/(?![/\\])[^\\\u0000-\u001f\u007f]*$/.test(next) ? next : "/";
 }
 
 export async function signIn(_prev: SignInState, form: FormData): Promise<SignInState> {

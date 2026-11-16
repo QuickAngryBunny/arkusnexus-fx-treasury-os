@@ -138,6 +138,13 @@ public sealed class InvitationFlow(
             return false;
         }
 
+        // Once per invitation, and only for a while after it expired; after that the company's admin (or the tenant
+        // admin portal for setup links) has to invite again.
+        if (view.RenewedFrom is not null || time.GetUtcNow() - view.ExpiresAt > identity.Options.InvitationRenewWindow)
+        {
+            return false;
+        }
+
         var tenant = await store.FindByIdAsync(view.TenantId, ct);
         if (tenant is not { IsActive: true })
         {
@@ -150,7 +157,8 @@ public sealed class InvitationFlow(
         try
         {
             issued = await identity.IssueInvitationAsync(conn, tx,
-                new NewInvitation(view.TenantId, view.Kind, view.Email, view.DisplayName, view.Role), ControlActor.Anonymous, ct);
+                new NewInvitation(view.TenantId, view.Kind, view.Email, view.DisplayName, view.Role, RenewedFrom: view.Id),
+                ControlActor.Anonymous, ct);
         }
         catch (IdentityConflictException)
         {

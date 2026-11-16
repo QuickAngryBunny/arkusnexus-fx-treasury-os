@@ -558,7 +558,7 @@
   "settings.save": "Guardar cambios",
   "settings.saved": "Cambios guardados.",
   "profile.kicker": "Datos personales",
-  "profile.emailHint": "Al cambiarlo enviamos un enlace de confirmación a la nueva dirección.",
+  "profile.emailHint": "Enviamos un enlace de confirmación a la nueva dirección. Al confirmar, vuelves a iniciar sesión en todos lados.",
   "profile.emailSent": "Guardado. Confirma el cambio con el enlace que enviamos a {email}.",
   "profile.prefs": "Preferencias",
   "profile.numberFormat": "Formato de números",
@@ -663,5 +663,8 @@
   "dash.news.empty": "Sin noticias en los últimos 30 días.",
   "join.invalid.body": "Este enlace se canceló o está incompleto. Pide al administrador de tu empresa una invitación nueva.",
   "onb.invalid.title": "Este enlace de configuración no es válido",
-  "onb.invalid.body": "Lo reemplazó uno más reciente o está incompleto. Usa el correo más reciente o pide ayuda a tu contacto en Arkus Nexus."
+  "onb.invalid.body": "Lo reemplazó uno más reciente o está incompleto. Usa el correo más reciente o pide ayuda a tu contacto en Arkus Nexus.",
+  "profile.passwordHint": "Solo se necesita para cambiar tu correo.",
+  "profile.passwordNeeded": "Escribe tu contraseña actual para cambiar tu correo.",
+  "profile.invalidEmail": "Escribe una dirección de correo distinta y válida."
 }

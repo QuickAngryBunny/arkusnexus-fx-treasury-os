@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Field, Segmented, SelectField } from "@fxos/ui";
+import { Field, PasswordField, Segmented, SelectField } from "@fxos/ui";
 import { saveProfile } from "@/app/settings/actions";
 import { ActionForm } from "@/components/ActionForm";
 import { SettingsShell } from "@/components/settings/SettingsShell";
@@ -21,12 +21,15 @@ export default async function ProfilePage() {
     <SettingsShell page="profile" eyebrow={m ? `${m.displayName} · ${m.role ? t(`role.${m.role}` as MessageKey) : ""}` : undefined}>
       {m && (
         <ActionForm action={saveProfile} submit={t("settings.save")} pending={t("onb.saving")} className="card stack-sm"
-          saved={t("settings.saved")} savedEmail={t("profile.emailSent", { email: "{email}" })}>
+          saved={t("settings.saved")} savedEmail={t("profile.emailSent", { email: "{email}" })}
+          messages={{ password_needed: t("profile.passwordNeeded"), wrong_password: t("security.wrong"), email_taken: t("email.taken"), invalid_email: t("profile.invalidEmail"), same_email: t("profile.invalidEmail") }}>
           <span className="kicker">{t("profile.kicker")}</span>
           <Field label={t("onb.name")} name="displayName" required maxLength={200} defaultValue={m.displayName} autoComplete="name" />
           <input type="hidden" name="currentEmail" value={m.email} />
           <Field label={t("auth.email")} name="email" type="email" required defaultValue={m.email} autoComplete="email"
             hint={t("profile.emailHint")} />
+          <PasswordField id="email-password" label={t("security.current")} name="currentPassword" autoComplete="current-password"
+            showLabel={t("auth.show")} hideLabel={t("auth.hide")} hint={t("profile.passwordHint")} />
           <span className="kicker">{t("profile.prefs")}</span>
           <div className="field-block">
             <span className="field-label">{t("company.language")}</span>

@@ -71,7 +71,10 @@ export async function saveProfile(_prev: FormState, form: FormData): Promise<For
 
   const email = str(form, "email").toLowerCase();
   if (email && email !== str(form, "currentEmail").toLowerCase()) {
-    const change = await apiPost("/api/auth/email/change", { email, locale });
+    // Not trimmed: passwords are taken as typed.
+    const currentPassword = String(form.get("currentPassword") ?? "");
+    if (!currentPassword) return { error: "password_needed" };
+    const change = await apiPost("/api/auth/email/change", { email, currentPassword, locale });
     if (!change.ok) return { error: change.message };
     revalidatePath("/", "layout");
     return { ok: true, emailSent: email };

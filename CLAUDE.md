@@ -152,7 +152,11 @@ MFA/two-step verification.
   cookie → profile language → company default. Server actions in `app/settings/actions.ts`; `ActionForm` takes strings
   only (no functions across the client boundary). Dashboard O-05: welcome/joined notice, first-plan card with bank chips
   (button disabled until Phase 4), empty "Ongoing conversions", news from the tenant DB, "Invite your team" for admins.
-  Sprint 7 still open: app security review (local); restore drill and real-data load are part of the DevOps hand-off.
+  Sprint 7 security review (2026-11-16): no exploitable findings; hardening done: email change needs the current
+  password and its confirmation ends every session and open reset links; a password change revokes open reset links;
+  an expired invitation renews once (control V0005 `invitation.renewed_from`) and only within 30 days of expiring;
+  `safeNext` rejects backslashes and control characters; the dev `X-Tenant` path isn't cached. Restore drill and
+  real-data load are part of the DevOps hand-off.
 - Forecast rule: publish every model's backtest next to the naive benchmark; do not present a model as better than
   naive unless `mae_vs_naive` < 1 for that horizon.
 - Phase 0 sprint 3 (moved to the DevOps hand-off): Azure internal environment, deploy workflow running per-tenant

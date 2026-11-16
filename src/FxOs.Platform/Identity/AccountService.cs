@@ -33,11 +33,14 @@ public sealed class AccountService(
             return new AccountResult(false, "weak_password", broken);
         }
 
+        // A reset link issued before the change would otherwise still work for its last hour.
         await conn.ExecAsync(
             """
             update user_account set password_hash = @hash, password_changed_at = now(), updated_at = now() where id = @id;
             update session set revoked_at = now(), revoked_reason = 'password_changed'
             where user_id = @id and revoked_at is null and id <> @sessionId;
+            update account_token set revoked_at = now()
+            where user_id = @id and purpose = 'password_reset' and used_at is null and revoked_at is null;
             """,
             new { hash = hasher.Hash(next!), id = who.UserId, sessionId = who.SessionId }, tx, ct);
         await ControlAudit.WriteAsync(conn, tx, ControlActor.User(who.UserId), "account.password_changed", who.TenantId,
@@ -69,8 +72,12 @@ public sealed class AccountService(
             new { name, userId }, ct);
     }
 
-    /// <summary>U-01: sends a confirmation link to the new address; nothing changes until it is used.</summary>
-    public async Task<AccountResult> RequestEmailChangeAsync(SessionPrincipal who, string? newEmail, string locale, CancellationToken ct = default)
+    /// <summary>
+    /// U-01: needs the current password (a session left open elsewhere can't move the account), then sends a
+    /// confirmation link to the new address; nothing changes until it is used.
+    /// </summary>
+    public async Task<AccountResult> RequestEmailChangeAsync(
+        SessionPrincipal who, string? newEmail, string? currentPassword, string locale, CancellationToken ct = default)
     {
         var email = IdentityStore.NormalizeEmail(newEmail ?? "");
         if (email.Length > 254 || !System.Text.RegularExpressions.Regex.IsMatch(email, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
@@ -85,6 +92,13 @@ public sealed class AccountService(
 
         await using var conn = await controlPlane.OpenAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
+        var hash = await conn.ScalarAsync<string>(
+            "select password_hash from user_account where id = @id", new { id = who.UserId }, tx, ct);
+        if (hash is null || hasher.Verify(currentPassword ?? "", hash) == PasswordVerification.Failed)
+        {
+            return new AccountResult(false, "wrong_password");
+        }
+
         if (await conn.ScalarAsync<bool>("select exists (select 1 from user_account where email = @email)", new { email }, tx, ct))
         {
             return new AccountResult(false, "email_taken");

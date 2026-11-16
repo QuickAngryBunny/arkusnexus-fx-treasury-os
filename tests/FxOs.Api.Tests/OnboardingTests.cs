@@ -105,6 +105,33 @@ public sealed class OnboardingTests(PlatformFixture fx)
         var fresh = PlatformFixture.LinkToken((await fx.EmailBodyAsync(email, "tenant_setup_invitation"))!, "setup");
         Assert.NotEqual(token, fresh);
         Assert.Equal("valid", Str(await Json(await client.GetAsync($"/api/auth/invitation?token={fresh}")), "state"));
+
+        // A renewed link that expires too can't be renewed again: someone has to invite again.
+        await using (var conn = await OpenAsync())
+        {
+            await conn.ExecuteAsync(
+                "update invitation set created_at = now() - interval '8 days', expires_at = now() - interval '1 day' where tenant_id = @tenantId and revoked_at is null",
+                new { tenantId });
+        }
+
+        Assert.False((await Json(await client.PostAsJsonAsync("/api/auth/invitation/renew", new { token = fresh }))).GetProperty("sent").GetBoolean());
+    }
+
+    [Fact]
+    public async Task An_invitation_that_expired_long_ago_is_not_renewed()
+    {
+        var (tenantId, email) = await NewTenantAsync();
+        var token = PlatformFixture.LinkToken((await fx.EmailBodyAsync(email, "tenant_setup_invitation"))!, "setup");
+        await using (var conn = await OpenAsync())
+        {
+            await conn.ExecuteAsync(
+                "update invitation set created_at = now() - interval '45 days', expires_at = now() - interval '38 days' where tenant_id = @tenantId",
+                new { tenantId });
+        }
+
+        var client = fx.Client();
+        Assert.Equal("expired", Str(await Json(await client.GetAsync($"/api/auth/invitation?token={token}")), "state"));
+        Assert.False((await Json(await client.PostAsJsonAsync("/api/auth/invitation/renew", new { token }))).GetProperty("sent").GetBoolean());
     }
 
     [Fact]

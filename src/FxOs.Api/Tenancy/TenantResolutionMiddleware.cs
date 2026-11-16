@@ -72,7 +72,9 @@ public sealed class TenantResolutionMiddleware(RequestDelegate next)
             return;
         }
 
-        var tenant = await FindAsync(cache, "tenant:" + slug, () => store.FindBySlugAsync(slug, http.RequestAborted));
+        // Not cached: an archived or deleted dummy tenant closes at once. (Signed-in requests re-check the tenant's
+        // status in the session query on every call, so their cached record is only used for routing.)
+        var tenant = await store.FindBySlugAsync(slug, http.RequestAborted);
         if (tenant is null)
         {
             await ProblemAsync(http, StatusCodes.Status404NotFound, "Tenant not found", $"No tenant '{slug}'.");
