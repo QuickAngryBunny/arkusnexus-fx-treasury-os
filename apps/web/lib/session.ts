@@ -17,9 +17,11 @@ export const getSession = cache(async () => {
   const signedIn = session?.ok ? session.data : null;
   const profile = signedIn?.tenant ? await apiGet<TenantProfile>("/api/tenant/profile") : null;
 
-  // The user's choice wins; otherwise the company's default; otherwise Spanish.
+  // The language switch (cookie) wins; then the user's profile language (U-01); then the company's default; then Spanish.
   const chosen = store.get(LOCALE_COOKIE)?.value;
-  const locale: Locale = isLocale(chosen) ? chosen : profile?.ok ? profile.data.locale : DEFAULT_LOCALE;
+  const locale: Locale = isLocale(chosen)
+    ? chosen
+    : profile?.ok ? (profile.data.me?.language ?? profile.data.locale) : DEFAULT_LOCALE;
 
   return {
     session: signedIn,
@@ -60,4 +62,12 @@ export async function requirePlatformAdmin() {
   if (!ctx.session) redirect("/sign-in?next=%2Fadmin");
   if (!ctx.session.isPlatformAdmin) notFound();
   return ctx as typeof ctx & { session: SessionInfo; viewer: SessionInfo["user"] };
+}
+
+/** Onboarding steps 2 and 3: the company's admins only; a finished company goes to its dashboard. */
+export async function requireOnboardingAdmin() {
+  const ctx = await requireSession("/setup/organization");
+  if (ctx.session.role !== "admin") redirect("/");
+  if (ctx.profile?.ok && ctx.profile.data.onboarding.completed) redirect("/");
+  return ctx;
 }

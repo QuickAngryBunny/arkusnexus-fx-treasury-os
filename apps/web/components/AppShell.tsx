@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { AppNav, Badge, MenuDivider, MenuItem, MenuSection, UserMenu, type AppNavItem } from "@fxos/ui";
 import { signOut } from "@/app/auth-actions";
@@ -12,7 +13,11 @@ export type Section = "dashboard" | "forecast";
 
 /** App frame for every signed-in screen: sidebar (AppNav + user menu), main content. Signed out → /sign-in. */
 export async function AppShell({ active, children }: { active?: Section; children: ReactNode }) {
-  const { session, viewer, locale, t } = await requireSession();
+  const { session, profile, viewer, locale, t } = await requireSession();
+  // O-03 / O-04: a company admin finishes onboarding before using the app. Other roles never see the setup steps.
+  if (session.role === "admin" && profile?.ok && !profile.data.onboarding.completed) {
+    redirect(profile.data.onboarding.companyConfirmed ? "/setup/banks" : "/setup/organization");
+  }
   const showDevTools = process.env.NODE_ENV !== "production";
   const companiesResult = await apiGet<Company[]>("/api/auth/companies");
   const companies = companiesResult.ok ? companiesResult.data : [];
@@ -73,7 +78,7 @@ export async function AppShell({ active, children }: { active?: Section; childre
                 options={LOCALES.map((l) => ({ value: l, label: t(`locale.${l}`) }))}
               />
               <MenuDivider />
-              <MenuItem disabled>{t("user.profile")}</MenuItem>
+              <MenuItem href="/settings/profile">{t("user.profile")}</MenuItem>
               {showDevTools && (
                 <>
                   <MenuDivider />

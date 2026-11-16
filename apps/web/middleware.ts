@@ -3,7 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 const SESSION_COOKIE = "fx_session";
 
 /** Pages that work signed out. Everything else needs a session. */
-const PUBLIC = ["/sign-in", "/forgot-password", "/reset-password"];
+/** /setup (O-02) and /join (T-05) open from email links before there is a session; /confirm-email works either way. */
+const PUBLIC = ["/sign-in", "/forgot-password", "/reset-password", "/setup", "/join", "/confirm-email"];
 
 /**
  * Fast path: no session cookie → straight to sign-in, remembering where the person was going.

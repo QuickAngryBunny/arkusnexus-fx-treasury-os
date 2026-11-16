@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { AlertBanner, PageHeader } from "@fxos/ui";
+import { AlertBanner, Badge, Button, Notice, PageHeader } from "@fxos/ui";
 import { AppShell } from "@/components/AppShell";
 import { RateGlance } from "@/components/dashboard/RateGlance";
-import { apiGet, type Forecasts, type LatestRate, type RateAnalytics, type RateHistory } from "@/lib/api";
+import { apiGet, type CompanyInfo, type Forecasts, type LatestRate, type NewsFeed, type RateAnalytics, type RateHistory } from "@/lib/api";
 import { formatRate, formatSigned, type MessageKey } from "@/lib/i18n";
 import { getSession } from "@/lib/session";
 
@@ -13,11 +13,13 @@ const DAY_MS = 86_400_000;
 const toDay = (iso: string) => Math.round(Date.parse(`${iso}T00:00:00Z`) / DAY_MS);
 
 /**
- * Dashboard: today's rate card with the same real FIX and model forecast as Exchange Forecast.
- * Phase 3 (O-05) adds the welcome, news, first conversion plan and team cards; Phase 4 adds ongoing conversions.
+ * Dashboard (O-05): today's rate card with the same real FIX and model forecast as Exchange Forecast, the welcome
+ * notice after onboarding or joining, the latest news, the first-conversion-plan card (Phase 4 enables it), an empty
+ * "Ongoing conversions" card and, for admins, "Invite your team".
  */
-export default async function Dashboard() {
-  const { tenant, profile, viewer, locale, t } = await getSession();
+export default async function Dashboard({ searchParams }: { searchParams: Promise<{ welcome?: string; joined?: string }> }) {
+  const { tenant, profile, viewer, role, locale, t } = await getSession();
+  const { welcome, joined } = await searchParams;
 
   if (!tenant || !profile) {
     return (
@@ -34,10 +36,13 @@ export default async function Dashboard() {
     );
   }
 
-  const [latest, forecasts, analytics] = await Promise.all([
+  const newsFrom = new Date(Date.now() - 30 * DAY_MS).toISOString().slice(0, 10);
+  const [latest, forecasts, analytics, news, company] = await Promise.all([
     apiGet<LatestRate>(`/api/tenant/rates/${SOURCE}/latest`),
     apiGet<Forecasts>(`/api/tenant/forecasts/${SOURCE}`),
     apiGet<RateAnalytics>(`/api/tenant/rates/${SOURCE}/analytics`),
+    apiGet<NewsFeed>(`/api/tenant/news?from=${newsFrom}`),
+    apiGet<CompanyInfo>("/api/tenant/company"),
   ]);
   if (!latest.ok) {
     return (
@@ -106,6 +111,15 @@ export default async function Dashboard() {
     };
   }
 
+  // ── O-05 cards: news (stored by the worker), the company's banks for the first plan ──
+  const articles = news.ok
+    ? news.data.windows.flatMap((w) => w.articles.filter((x) => x.lang === locale.slice(0, 2)).concat(w.articles)).filter(
+        (x, i, all) => all.findIndex((y) => y.url === x.url) === i,
+      ).slice(0, 3)
+    : [];
+  const banks = company.ok ? company.data.banks : [];
+  const when = (iso: string) => new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", timeZone: tz }).format(new Date(iso));
+
   return (
     <AppShell active="dashboard">
       <div className="stack-sm">
@@ -118,6 +132,12 @@ export default async function Dashboard() {
             </button>
           }
         />
+
+        {(welcome || joined) && (
+          <Notice tone="success" title={t(joined ? "dash.joined.title" : "dash.welcome.title", { company: profile.data.displayName })}>
+            {t(joined ? "dash.joined.body" : "dash.welcome.body")}
+          </Notice>
+        )}
 
         <section className="dash-top">
           <Link href="/forecast" className="dash-rate" aria-label={t("dash.rate.aria", { rate: rate(r.rate) })}>
@@ -158,6 +178,52 @@ export default async function Dashboard() {
               )}
             </span>
           </Link>
+        </section>
+
+        <section className="dash-grid">
+          <article className="card stack-sm">
+            <div className="section-row">
+              <span className="kicker">{t("dash.plan.kicker")}</span>
+              <Badge tone="violet" dot={false}>{t("dash.soon")}</Badge>
+            </div>
+            <h2 className="card-title">{t("dash.plan.title")}</h2>
+            <p className="subtitle">{t("dash.plan.body")}</p>
+            {banks.length > 0 && (
+              <ul className="bank-chips" aria-label={t("company.banks")}>
+                {banks.map((b) => <li key={b.id}>{b.name} · {b.currency}</li>)}
+              </ul>
+            )}
+            <div><Button disabled title={t("dash.plan.later")}>{t("dash.plan.cta")}</Button></div>
+          </article>
+
+          <article className="card stack-sm">
+            <span className="kicker">{t("dash.ongoing.kicker")}</span>
+            <p className="empty-note">{t("dash.ongoing.empty")}</p>
+            {role === "admin" && (
+              <p className="subtitle">
+                {t("dash.team.body")} <Link href="/settings/team">{t("dash.team.cta")}</Link>
+              </p>
+            )}
+          </article>
+
+          <article className="card stack-sm">
+            <div className="section-row">
+              <span className="kicker">{t("dash.news.kicker")}</span>
+              <Link href="/forecast">{t("dash.news.all")}</Link>
+            </div>
+            {articles.length === 0
+              ? <p className="empty-note">{t("dash.news.empty")}</p>
+              : (
+                <ul className="news-list">
+                  {articles.map((x) => (
+                    <li key={x.url}>
+                      <a href={x.url} target="_blank" rel="noopener noreferrer">{x.title}</a>
+                      <span>{x.sourceName} · {when(x.publishedAt)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+          </article>
         </section>
       </div>
     </AppShell>

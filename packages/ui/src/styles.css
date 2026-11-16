@@ -482,3 +482,91 @@ a.vi-stat:hover { background: var(--vi-selected); }
 .vi-tenants__text strong { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vi-tenants__text span { font-size: 12px; color: var(--vi-muted); }
 .vi-tenants__link { padding: 8px 12px 10px; font-size: 14px; font-weight: 800; color: var(--vi-violet); text-decoration: none; }
+
+/* ── Onboarding step pills (O-02 to O-04) ───────────────── */
+.vi-pills { margin: 0; padding: 0; list-style: none; display: flex; gap: 6px; flex-wrap: wrap; font-family: var(--vi-font); }
+.vi-pills__item { display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px 0 4px; border-radius: var(--vi-radius-pill); background: var(--vi-white); color: var(--vi-muted); font-size: 12px; font-weight: 800; }
+.vi-pills__num { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; background: var(--vi-mist); color: var(--vi-violet); }
+.vi-pills__item--current { background: var(--vi-violet); color: var(--vi-white); }
+.vi-pills__item--current .vi-pills__num { background: var(--vi-white); color: var(--vi-violet); }
+.vi-pills__item--done { color: var(--vi-ink); }
+.vi-pills__item--done .vi-pills__num { background: var(--vi-green); color: var(--vi-white); }
+
+/* ── Bank tags (O-04, C-01) ─────────────────────────────── */
+.vi-tags { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 22px; background: var(--vi-white); border: 1.5px solid var(--vi-line); font-family: var(--vi-font); }
+.vi-tags--missing { border-color: var(--vi-orange); }
+.vi-tags__head { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.vi-tags__cur { padding: 3px 9px; border-radius: 8px; font-size: 12px; font-weight: 800; }
+.vi-tags--mxn .vi-tags__cur { background: var(--vi-green-tint); color: var(--vi-green-ink); }
+.vi-tags--usd .vi-tags__cur { background: var(--vi-mist); color: var(--vi-violet-ink); }
+.vi-tags__list { display: flex; flex-wrap: wrap; gap: 8px; min-height: 36px; align-items: center; }
+.vi-tags__tag { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 6px 0 12px; border-radius: var(--vi-radius-pill); color: var(--vi-white); font-size: 14px; font-weight: 700; }
+.vi-tags--mxn .vi-tags__tag { background: var(--vi-green); }
+.vi-tags--usd .vi-tags__tag { background: var(--vi-violet); }
+.vi-tags__name { background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: inherit; }
+button.vi-tags__name { cursor: text; text-decoration: underline dotted rgb(255 255 255 / 60%); text-underline-offset: 3px; }
+.vi-tags__x { width: 24px; height: 24px; border: 0; border-radius: 50%; background: rgb(255 255 255 / 25%); color: inherit; font-size: 14px; font-weight: 800; cursor: pointer; }
+.vi-tags__x:focus-visible, .vi-tags__name:focus-visible, .vi-tags__add button:focus-visible, .vi-tags__suggest button:focus-visible { outline: none; box-shadow: var(--vi-focus); }
+.vi-tags__edit { display: inline-flex; gap: 6px; align-items: center; }
+.vi-tags__edit input { height: 36px; border-radius: var(--vi-radius-pill); border: 1.5px solid var(--vi-violet); padding: 0 12px; font: inherit; font-size: 14px; }
+.vi-tags__edit button { height: 32px; padding: 0 10px; border: 0; border-radius: 10px; background: var(--vi-mist); color: var(--vi-violet); font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.vi-tags__empty { font-size: 13px; color: var(--vi-muted); }
+.vi-tags__empty--missing { color: var(--vi-orange-ink); font-weight: 700; }
+.vi-tags__add { display: flex; gap: 8px; }
+.vi-tags__add input { flex: 1; min-width: 0; height: var(--vi-tap); box-sizing: border-box; border-radius: var(--vi-radius-md); border: 1.5px solid var(--vi-line); padding: 0 14px; font: inherit; font-size: 15px; color: var(--vi-ink); }
+.vi-tags__add input:focus { outline: none; border-color: var(--vi-violet); box-shadow: var(--vi-focus); }
+.vi-tags__add button { height: var(--vi-tap); padding: 0 16px; border: 0; border-radius: var(--vi-radius-md); background: var(--vi-mist); color: var(--vi-violet); font: inherit; font-size: 14px; font-weight: 800; cursor: pointer; }
+.vi-tags__suggest { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; color: var(--vi-muted); }
+.vi-tags__suggest button { height: 30px; padding: 0 10px; border-radius: var(--vi-radius-pill); border: 1.5px dashed var(--vi-track); background: var(--vi-white); color: var(--vi-violet-ink); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+
+/* ── Settings menu ─────────────────────────────────────── */
+.vi-settings-nav { display: flex; flex-direction: column; gap: 18px; font-family: var(--vi-font); }
+.vi-settings-nav__group { display: flex; flex-direction: column; gap: 2px; }
+.vi-settings-nav__title { padding: 0 12px 6px; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--vi-muted); }
+.vi-settings-nav__item { display: flex; align-items: center; min-height: var(--vi-tap); padding: 0 12px; border-radius: var(--vi-radius-md); color: var(--vi-ink); font-weight: 700; font-size: 15px; text-decoration: none; }
+.vi-settings-nav__item:hover { background: var(--vi-mist); }
+.vi-settings-nav__item[aria-current="page"] { background: var(--vi-selected); color: var(--vi-violet-ink); }
+.vi-settings-nav__item:focus-visible { outline: none; box-shadow: var(--vi-focus); }
+@media (max-width: 900px) {
+  .vi-settings-nav { flex-direction: row; overflow-x: auto; gap: 4px; }
+  .vi-settings-nav__group { flex-direction: row; gap: 4px; }
+  .vi-settings-nav__title { display: none; }
+  .vi-settings-nav__item { white-space: nowrap; }
+}
+
+/* ── Team list (T-01): person cell, filter pills, row menu ─────────── */
+.person-cell { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.person-cell__avatar, .join-person__avatar {
+  flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%;
+  background: var(--vi-mist); color: var(--vi-violet-ink); font-size: 14px; font-weight: 800;
+}
+.person-cell > span:last-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.person-cell > span:last-child > span { font-size: 13px; color: var(--vi-muted); overflow-wrap: anywhere; }
+.filter-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.filter-pills a {
+  display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: var(--vi-radius-pill);
+  background: var(--vi-canvas); color: var(--vi-ink-2); font-size: 13px; font-weight: 700; text-decoration: none;
+}
+.filter-pills a:hover { background: var(--vi-mist); }
+.filter-pills a[aria-current="page"] { background: var(--vi-plum); color: var(--vi-white); }
+.filter-pills a:focus-visible { outline: none; box-shadow: var(--vi-focus); }
+.row-menu { position: relative; display: inline-block; }
+.row-menu__trigger {
+  width: var(--vi-tap); height: var(--vi-tap); border: none; border-radius: 50%; background: transparent; color: var(--vi-ink-2);
+  font-size: 20px; font-weight: 800; cursor: pointer;
+}
+.row-menu__trigger:hover, .row-menu__trigger[aria-expanded="true"] { background: var(--vi-mist); }
+.row-menu__trigger:focus-visible { outline: none; box-shadow: var(--vi-focus); }
+.row-menu__panel {
+  position: fixed; z-index: 30; min-width: 220px; padding: 6px;
+  background: var(--vi-white); border: 1px solid var(--vi-line); border-radius: var(--vi-radius-lg);
+  box-shadow: 0 12px 32px rgb(36 21 47 / 14%);
+}
+.row-menu__panel form { margin: 0; }
+.grid.team-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 700px) { .grid.team-stats { grid-template-columns: minmax(0, 1fr); } }
+
+/* Multi-line text in a Field look-alike (invite note). */
+.vi-field__control.textarea { min-height: 88px; padding-top: 10px; padding-bottom: 10px; resize: vertical; font-family: inherit; line-height: 1.4; }
+.toast { position: fixed; top: 24px; right: 24px; z-index: 40; width: min(420px, calc(100vw - 32px)); box-shadow: 0 12px 32px rgb(36 21 47 / 16%); border-radius: var(--vi-radius-lg); }
+@media (max-width: 600px) { .toast { top: auto; bottom: 88px; right: 16px; } }

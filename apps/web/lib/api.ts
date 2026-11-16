@@ -38,6 +38,15 @@ export async function apiPost<T>(path: string, body: unknown = {}): Promise<ApiR
   });
 }
 
+/** PUT as the signed-in user. */
+export async function apiPut<T>(path: string, body: unknown = {}): Promise<ApiResult<T>> {
+  return send<T>(path, {
+    method: "PUT",
+    headers: { Accept: "application/json", "Content-Type": "application/json", ...(await sessionHeaders()) },
+    body: JSON.stringify(body),
+  });
+}
+
 /** Raw call for the sign-in and password endpoints: status and JSON body, plus the browser's address and agent. */
 export async function authCall<T>(
   method: "GET" | "POST", path: string, body?: unknown,
@@ -72,6 +81,56 @@ export type TenantProfile = {
   locale: "es-MX" | "en-US";
   timeZone: string;
   counts: { users: number };
+  role: Role | null;
+  onboarding: { companyConfirmed: boolean; completed: boolean };
+  me: { language: "es-MX" | "en-US"; numberFormat: "period_decimal" | "comma_decimal"; timeZone: string } | null;
+};
+
+export type Bank = { id: string; name: string; currency: "MXN" | "USD" };
+
+/** GET /api/tenant/company (O-03, O-04, C-01). */
+export type CompanyInfo = {
+  displayName: string;
+  legalName: string | null;
+  country: string;
+  timeZone: string;
+  conversionDirection: "usd_to_mxn" | "mxn_to_usd" | "both";
+  locale: "es-MX" | "en-US";
+  baseCurrency: "MXN" | "USD";
+  reportingCurrency: "MXN" | "USD";
+  onboarding: { companyConfirmed: boolean; completed: boolean };
+  banks: Bank[];
+};
+
+/** GET /api/tenant/me (U-01). */
+export type Me = {
+  displayName: string;
+  email: string;
+  role: Role | null;
+  language: "es-MX" | "en-US";
+  numberFormat: "period_decimal" | "comma_decimal";
+  timeZone: string;
+  passwordChangedAt: string | null;
+};
+
+export type NotificationSetting = { code: string; defaultEnabled: boolean; approversOnly: boolean; enabled: boolean };
+
+/** GET /api/auth/invitation (O-02, T-05, O-S1, T-S1). */
+export type InvitationInfo = {
+  state: "valid" | "expired" | "used" | "revoked" | "not_found";
+  kind: "tenant_setup" | "teammate" | null;
+  email: string | null;
+  displayName: string | null;
+  role: Role | null;
+  company: string | null;
+  inviterName: string | null;
+  expiresAt: string | null;
+};
+
+/** GET /api/tenant/team (T-01). */
+export type Team = {
+  members: { userId: string; displayName: string; email: string; role: Role; status: "active" | "deactivated"; lastSignInAt: string | null }[];
+  invitations: { id: string; displayName: string; email: string; role: Role; state: "pending" | "expired"; expiresAt: string; createdAt: string }[];
 };
 
 export type AuditEvent = { id: number; occurredAt: string; actor: string; action: string; entityType: string | null; entityId: string | null };

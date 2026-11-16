@@ -156,8 +156,14 @@ public sealed class SignInTests(PlatformFixture fx)
         {
             await conn.ExecuteAsync(
                 "insert into tenant_membership (tenant_id, user_id, role) values (@t, @u, 'standard')", new { t = second.Id, u = userId });
+            // created_at is set past the first company's session explicitly: that one comes from the .NET clock, this
+            // one would come from the database's, and the two can drift apart by a few milliseconds.
             await conn.ExecuteAsync(
-                "insert into session (user_id, tenant_id, token_hash, expires_at, revoked_at, revoked_reason) values (@u, @t, @h, now() + interval '1 hour', now(), 'sign_out')",
+                """
+                insert into session (user_id, tenant_id, token_hash, created_at, expires_at, revoked_at, revoked_reason)
+                select @u, @t, @h, max(created_at) + interval '1 second', now() + interval '1 hour', now(), 'sign_out'
+                from session where user_id = @u
+                """,
                 new { u = userId, t = second.Id, h = SecureToken.New().Hash });
         }
 

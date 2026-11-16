@@ -141,6 +141,18 @@ MFA/two-step verification.
   Tenant menu (A-05/A-06) from `/api/auth/companies`, switch with `/api/auth/session/company`. Migrator `platform-admin`.
   Default platform admin: the owner's work email (set locally; not stored in the repo). Prototype text "No sign-in until
   Phase 6" is outdated; the portal uses the app's sign-in.
+  Sprints 4–6 (onboarding, team, settings): tenant V0010 `company_confirmed_at`. API: `InvitationFlow` (describe /
+  accept / renew expired links; welcome + member_joined emails), `TeamService` (invite standard/approver, resend, cancel,
+  role, deactivate/reactivate, send reset; last active admin protected), `AccountService` (password change, name, email
+  change with a 24 h confirm link); `/api/tenant/me|company|banks|onboarding/complete`, `/api/tenant/team/*` (all
+  `.CompanyAdminOnly()`), `/api/auth/invitation*|password/change|email/*`. Web: `/setup` (O-02/O-S1) →
+  `/setup/organization` (O-03) → `/setup/banks` (O-04/O-S2) → `/?welcome=1`; `/join` (T-05/T-S1), `/confirm-email`;
+  `/settings/profile|security|notifications|company|team` (U-01–U-03, C-01, T-01–T-03/T-S3) in `SettingsShell`.
+  AppShell sends an admin with unfinished onboarding to the next setup step (other roles never see it). Locale: switch
+  cookie → profile language → company default. Server actions in `app/settings/actions.ts`; `ActionForm` takes strings
+  only (no functions across the client boundary). Dashboard O-05: welcome/joined notice, first-plan card with bank chips
+  (button disabled until Phase 4), empty "Ongoing conversions", news from the tenant DB, "Invite your team" for admins.
+  Sprint 7 still open: app security review (local); restore drill and real-data load are part of the DevOps hand-off.
 - Forecast rule: publish every model's backtest next to the naive benchmark; do not present a model as better than
   naive unless `mae_vs_naive` < 1 for that horizon.
 - Phase 0 sprint 3 (moved to the DevOps hand-off): Azure internal environment, deploy workflow running per-tenant

@@ -161,6 +161,18 @@ when `BANXICO_TOKEN` is set), or once with `workers/python/.venv/bin/fxworkers j
 In the FX app, the tenant menu above the user card (inside the user menu on phones) switches company. Platform admins
 can open any dummy tenant there without a membership; real-data tenants always need one.
 
+## Onboarding, team and settings (Phase 3)
+
+The setup email links to `/setup?token=…`: the first admin sets a password, confirms the company (`/setup/organization`)
+and adds at least one MXN and one USD bank (`/setup/banks`). Until that's done, an admin who signs in is sent back to
+the step they're on; approvers and standard members go straight to the dashboard.
+
+Settings (user menu → Profile & settings): Profile (name, email change with a confirmation link, language, number
+format, time zone), Security (password change), Notifications (stored now; Phase 4 sends them), Company info (admins
+edit name, currencies and banks) and Team (admins only: invite, resend/cancel, change role, deactivate/reactivate, send
+a password reset). Invitees join at `/join?token=…`. Locally, emails only go to `Email:AllowedRecipients`; other
+addresses stay in the outbox.
+
 ## Email through Firebase (Phase 3)
 
 The API writes each email to the control-plane outbox (`email_outbox`, body encrypted with ASP.NET Data Protection)
