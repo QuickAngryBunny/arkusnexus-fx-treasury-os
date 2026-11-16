@@ -34,7 +34,7 @@ public sealed record JoinResult(
 /// </summary>
 public sealed class InvitationFlow(
     ControlPlaneDb controlPlane, ControlPlaneStore store, TenantDataSources tenantDbs, IdentityStore identity,
-    SessionStore sessions, IPasswordHasher hasher, EmailOutbox outbox, AppLinks links, TimeProvider time)
+    SessionStore sessions, IPasswordHasher hasher, EmailOutbox outbox, AppLinks links, TimeProvider time, EmailClocks clocks)
 {
     public async Task<InvitationInfo> DescribeAsync(string? rawToken, CancellationToken ct = default)
     {
@@ -175,11 +175,13 @@ public sealed class InvitationFlow(
         Npgsql.NpgsqlConnection conn, Npgsql.NpgsqlTransaction tx, InvitationView view, string company, IssuedToken issued,
         string locale, CancellationToken ct, string? note = null)
     {
+        // The invitee has no profile yet: the company's time zone once it chose one.
+        var clock = await clocks.ForCompanyAsync(view.TenantId, ct);
         if (view.Kind == InvitationKind.TenantSetup)
         {
             return EmailTemplates.TenantSetupInvitation(locale, view.Email,
                 new TenantSetupInvitationModel(view.TenantId, view.DisplayName, company, links.TenantSetup(issued.RawToken),
-                    issued.ExpiresAt, EmailClock.MexicoCity));
+                    issued.ExpiresAt, clock));
         }
 
         var inviter = view.InvitedBy is { } id
@@ -187,7 +189,7 @@ public sealed class InvitationFlow(
             : null;
         return EmailTemplates.TeammateInvitation(locale, view.Email,
             new TeammateInvitationModel(view.TenantId, view.DisplayName, inviter ?? company, company, view.Role, note,
-                links.Join(issued.RawToken), issued.ExpiresAt, EmailClock.MexicoCity));
+                links.Join(issued.RawToken), issued.ExpiresAt, clock));
     }
 
     private async Task<bool> AccountHasPasswordAsync(string email, CancellationToken ct)

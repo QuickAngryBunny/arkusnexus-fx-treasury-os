@@ -47,7 +47,8 @@ MFA/two-step verification.
 - Every new tenant feature gets a cross-tenant test. Dummy data only via `workers/python` (refuses non-dummy tenants).
 - Spanish and English from the first screen; currency always shown with its code.
 - Display currency values (amounts, exchange rates, errors in currency) with 2 decimals via `formatMoney`/`formatRate`
-  (`CURRENCY_DIGITS` in `apps/web/lib/i18n.ts`); storage and calculations keep full precision.
+  (`CURRENCY_DIGITS` in `apps/web/lib/i18n.ts`); storage and calculations keep full precision. Pass them `numbers`
+  from `getSession()` (the profile's number format, U-01), not `locale`; dates and words keep `locale`.
 
 ## UI decisions
 - "Violeta" direction: violet/plum, rounded cards, based on the reference mobile app; font **Manrope** (not Urbanist).
@@ -157,6 +158,10 @@ MFA/two-step verification.
   an expired invitation renews once (control V0005 `invitation.renewed_from`) and only within 30 days of expiring;
   `safeNext` rejects backslashes and control characters; the dev `X-Tenant` path isn't cached. Restore drill and
   real-data load are part of the DevOps hand-off.
+  Brief gaps closed: tenant V0011 `audit_log.control_audit_id` + `ControlAuditMirror` (hosted, `Platform:MirrorControlAudit`,
+  every 10 s) copies `account.*`, `invitation.*`, `membership.*` from `control_audit_log` into each company's audit log,
+  once; `EmailClocks` picks email times: profile zone → company zone once confirmed → Mexico City (setup invitation
+  stays Mexico City); approval-request notifications are listed/settable for approvers and admins only.
 - Forecast rule: publish every model's backtest next to the naive benchmark; do not present a model as better than
   naive unless `mae_vs_naive` < 1 for that horizon.
 - Phase 0 sprint 3 (moved to the DevOps hand-off): Azure internal environment, deploy workflow running per-tenant

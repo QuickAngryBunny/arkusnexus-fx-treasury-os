@@ -90,7 +90,8 @@ public static class CompanyEndpoints
             return Results.NoContent();
         });
 
-        // ── Notifications (U-03): defaults live in notification_type; rows only for changes ──
+        // ── Notifications (U-03): defaults live in notification_type; rows only for changes. Items marked
+        //    approvers_only (approval requests) are shown to approvers and admins only. ──
         group.MapGet("/me/notifications", async (ITenantConnectionFactory db, ITenantContext tenant, CancellationToken ct) =>
         {
             var who = tenant.Principal;
@@ -101,8 +102,9 @@ public static class CompanyEndpoints
                 select t.code, t.default_enabled, t.approvers_only, coalesce(p.email_enabled, t.default_enabled) as enabled
                 from notification_type t
                 left join notification_preference p on p.notification_code = t.code and p.user_id = @id
+                where not t.approvers_only or @canApprove
                 order by t.sort_order
-                """, new { id = who.UserId }, cancellationToken: ct));
+                """, new { id = who.UserId, canApprove = CanApprove(who) }, cancellationToken: ct));
             return Results.Ok(rows);
         });
 
@@ -122,8 +124,8 @@ public static class CompanyEndpoints
             foreach (var item in body.Items ?? [])
             {
                 var isDefault = await conn.ExecuteScalarAsync<bool?>(new CommandDefinition(
-                    "select default_enabled = @enabled from notification_type where code = @code",
-                    new { code = item.Code, enabled = item.Enabled }, tx, cancellationToken: ct));
+                    "select default_enabled = @enabled from notification_type where code = @code and (not approvers_only or @canApprove)",
+                    new { code = item.Code, enabled = item.Enabled, canApprove = CanApprove(who) }, tx, cancellationToken: ct));
                 if (isDefault is null)
                 {
                     return Results.ValidationProblem(new Dictionary<string, string[]> { ["items"] = [$"Unknown notification '{item.Code}'."] });
@@ -313,6 +315,8 @@ public static class CompanyEndpoints
 
         return group;
     }
+
+    private static bool CanApprove(SessionPrincipal who) => who.Role is MembershipRole.Approver or MembershipRole.Admin;
 
     private static async Task<object> CompanyAsync(NpgsqlConnection conn, NpgsqlTransaction? tx, CancellationToken ct)
     {

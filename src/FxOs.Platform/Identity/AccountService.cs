@@ -13,11 +13,12 @@ public sealed record AccountResult(bool Ok, string? Code = null, IReadOnlyList<s
 /// </summary>
 public sealed class AccountService(
     ControlPlaneDb controlPlane, ControlPlaneStore store, TenantDataSources tenantDbs, IdentityStore identity,
-    IPasswordHasher hasher, EmailOutbox outbox, AppLinks links, TimeProvider time)
+    IPasswordHasher hasher, EmailOutbox outbox, AppLinks links, TimeProvider time, EmailClocks clocks)
 {
     public async Task<AccountResult> ChangePasswordAsync(
         SessionPrincipal who, string? current, string? next, string locale, CancellationToken ct = default)
     {
+        var clock = await clocks.ForUserAsync(who.UserId, who.TenantId, ct);
         await using var conn = await controlPlane.OpenAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
         var hash = await conn.ScalarAsync<string>(
@@ -46,7 +47,7 @@ public sealed class AccountService(
         await ControlAudit.WriteAsync(conn, tx, ControlActor.User(who.UserId), "account.password_changed", who.TenantId,
             "user_account", who.UserId.ToString(), ct: ct);
         await outbox.EnqueueAsync(conn, tx, EmailTemplates.PasswordChanged(locale, who.Email,
-            new PasswordChangedModel(who.TenantId, who.DisplayName, who.Email, time.GetUtcNow(), EmailClock.MexicoCity,
+            new PasswordChangedModel(who.TenantId, who.DisplayName, who.Email, time.GetUtcNow(), clock,
                 links.ForgotPassword)), ct);
         await tx.CommitAsync(ct);
         return new AccountResult(true);
@@ -90,6 +91,7 @@ public sealed class AccountService(
             return new AccountResult(false, "same_email");
         }
 
+        var clock = await clocks.ForUserAsync(who.UserId, who.TenantId, ct);
         await using var conn = await controlPlane.OpenAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
         var hash = await conn.ScalarAsync<string>(
@@ -107,7 +109,7 @@ public sealed class AccountService(
         var issued = await identity.IssueEmailChangeAsync(conn, tx, who.UserId, email, ct);
         await outbox.EnqueueAsync(conn, tx, EmailTemplates.EmailChangeConfirmation(locale, email,
             new EmailChangeConfirmationModel(who.DisplayName, email, links.ConfirmEmail(issued.RawToken), issued.ExpiresAt,
-                EmailClock.MexicoCity)), ct);
+                clock)), ct);
         await tx.CommitAsync(ct);
         return new AccountResult(true);
     }

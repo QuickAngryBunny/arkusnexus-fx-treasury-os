@@ -22,7 +22,7 @@ const STATUS_TONE: Record<DayStatus, BadgeTone> = {
 /** Full history (R-02): coverage and issues, year / month / day views with fixes, and the sync sources panel. */
 export default async function FullHistoryPage({ searchParams }: { searchParams: Promise<Params> }) {
   const params = await searchParams;
-  const { tenant, profile, locale, t } = await getSession();
+  const { tenant, profile, locale, numbers, t } = await getSession();
   const crumbs = (
     <Breadcrumb label={t("breadcrumb.label")} linkAs={Link} items={[{ label: t("nav.forecast"), href: "/forecast" }, { label: t("hist.crumb") }]} />
   );
@@ -83,7 +83,7 @@ export default async function FullHistoryPage({ searchParams }: { searchParams: 
     view === "day" ? apiGet<HistoryDay>(`${BASE}/history/day/${day}`) : null,
   ]);
 
-  const rate = (v: number) => formatRate(locale, v);
+  const rate = (v: number) => formatRate(numbers, v);
   const statusChip = (st: DayStatus, revision = 1) => (
     <Badge tone={STATUS_TONE[st]} dot={false}>{st === "revised" ? t("hist.st.revised", { n: revision }) : t(`hist.st.${st}` as MessageKey)}</Badge>
   );
@@ -133,7 +133,7 @@ export default async function FullHistoryPage({ searchParams }: { searchParams: 
           </div>
           <div className="hist-card">
             <span>{t("hist.observations")}</span>
-            <strong>{formatNumber(locale, s.observations)}</strong>
+            <strong>{formatNumber(numbers, s.observations)}</strong>
           </div>
           <div className={`hist-card${s.openGaps + s.duplicates > 0 ? " hist-card--issue" : ""}`}>
             <span>{t("hist.issues")}</span>
@@ -297,7 +297,7 @@ export default async function FullHistoryPage({ searchParams }: { searchParams: 
                             <>
                               <dt>{t("hist.dayChange")}</dt>
                               <dd className={d.change > 0 ? "fx-up" : d.change < 0 ? "fx-down" : undefined}>
-                                {t("hist.dayChangeValue", { change: formatSigned(locale, d.change, CURRENCY_DIGITS), pct: formatSigned(locale, d.changePct, 2, "%") })}
+                                {t("hist.dayChangeValue", { change: formatSigned(numbers, d.change, CURRENCY_DIGITS), pct: formatSigned(numbers, d.changePct, 2, "%") })}
                               </dd>
                             </>
                           )}

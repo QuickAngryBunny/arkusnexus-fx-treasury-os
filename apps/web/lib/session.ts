@@ -2,7 +2,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { apiGet, SESSION_COOKIE, type SessionInfo, type TenantProfile } from "@/lib/api";
-import { DEFAULT_LOCALE, LOCALE_COOKIE, isLocale, translator, type Locale } from "@/lib/i18n";
+import { DEFAULT_LOCALE, LOCALE_COOKIE, isLocale, numberLocale, translator, type Locale } from "@/lib/i18n";
 
 /**
  * Per-request context shared by the layout, the app shell and pages (React cache dedupes the API calls).
@@ -35,6 +35,8 @@ export const getSession = cache(async () => {
     sessionEnded: hasCookie && !signedIn && session !== null && !session.ok && session.status === 401,
     apiDown: session !== null && !session.ok && session.status === 0,
     locale,
+    /** For numbers only (formatRate, formatMoney, …): follows the profile's number format. */
+    numbers: numberLocale(locale, profile?.ok ? profile.data.me?.numberFormat : null),
     t: translator(locale),
   };
 });

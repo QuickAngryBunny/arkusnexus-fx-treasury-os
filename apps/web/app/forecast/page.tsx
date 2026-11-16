@@ -14,7 +14,7 @@ const toDay = (iso: string) => Math.round(Date.parse(`${iso}T00:00:00Z`) / DAY_M
 
 /** Exchange Forecast (R-01): today, trend, volatility and forecast up front; 12 months → forecast chart; drivers. */
 export default async function ForecastPage() {
-  const { tenant, profile, locale, t } = await getSession();
+  const { tenant, profile, locale, numbers, t } = await getSession();
   const fmtDate = (iso: string, opts: Intl.DateTimeFormatOptions) =>
     new Intl.DateTimeFormat(locale, { ...opts, timeZone: "UTC" }).format(new Date(`${iso}T00:00:00Z`));
 
@@ -53,7 +53,7 @@ export default async function ForecastPage() {
   ]);
   const source = sources.ok ? sources.data.find((s) => s.code === SOURCE) : undefined;
   const a = analytics.ok ? analytics.data : null;
-  const rate = (v: number) => formatRate(locale, v);
+  const rate = (v: number) => formatRate(numbers, v);
   const eyebrow = source?.lastLoad
     ? t("fx.eyebrow", { synced: formatDateTime(locale, source.lastLoad.at, profile.data.timeZone) })
     : t("fx.eyebrowNoSync");
@@ -66,8 +66,8 @@ export default async function ForecastPage() {
       value={rate(r.rate)}
       note={r.previous && r.change !== null && r.changePct !== null
         ? t("fx.vsPrevious", {
-            change: formatSigned(locale, r.change, CURRENCY_DIGITS),
-            pct: formatSigned(locale, r.changePct, 2, "%"),
+            change: formatSigned(numbers, r.change, CURRENCY_DIGITS),
+            pct: formatSigned(numbers, r.changePct, 2, "%"),
             day: fmtDate(r.previous.date, { weekday: "long" }),
           })
         : undefined}
@@ -85,7 +85,7 @@ export default async function ForecastPage() {
       note={[
         streakText(t, a.streakWeeks),
         a.sma50 !== null && t(a.rate >= a.sma50 ? "fx.vsSma50Above" : "fx.vsSma50Below", { sma: rate(a.sma50) }),
-        yearChange && t("fx.oneYear", { pct: formatSigned(locale, yearChange.changePct, 1, "%") }),
+        yearChange && t("fx.oneYear", { pct: formatSigned(numbers, yearChange.changePct, 1, "%") }),
       ].filter(Boolean).join(" · ")}
     />
   );
@@ -98,13 +98,13 @@ export default async function ForecastPage() {
       label={t("fx.volKicker")}
       value={
         <>
-          {formatRate(locale, vol30, 1)}% <span className="fx-level">{t(`fx.vol.${vd.level}` as MessageKey)}</span>
+          {formatRate(numbers, vol30, 1)}% <span className="fx-level">{t(`fx.vol.${vd.level}` as MessageKey)}</span>
         </>
       }
       note={[
         t("fx.volTypical", { move: rate(vd.typicalDailyMove) }),
         vd.peak12m && (vd.peak12m.vol > vol30 + 0.05
-          ? t("fx.volCalmer", { month: monthName(locale, vd.peak12m.month), vol: `${formatRate(locale, vd.peak12m.vol, 1)}%` })
+          ? t("fx.volCalmer", { month: monthName(locale, vd.peak12m.month), vol: `${formatRate(numbers, vd.peak12m.vol, 1)}%` })
           : t("fx.volPeak")),
       ].filter(Boolean).join(" ")}
     >
@@ -147,7 +147,7 @@ export default async function ForecastPage() {
   const dayMonthYear = (iso: string) => fmtDate(iso, { day: "numeric", month: "short", year: "numeric" });
   const timeOf = (iso: string) =>
     new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: tz }).format(new Date(iso));
-  const times = (sigma: number) => formatRate(locale, Math.abs(sigma), 1);
+  const times = (sigma: number) => formatRate(numbers, Math.abs(sigma), 1);
   const toArticles = (key: string) =>
     // The widget shows the single most relevant headline.
     (feed?.windows.find((w) => w.key === key)?.articles ?? []).slice(0, 1).map((x) => ({
@@ -170,11 +170,11 @@ export default async function ForecastPage() {
       key: "today",
       kicker: t("news.todayKicker", { date: dayMonthYear(scored.date) }),
       rate: rate(scored.rate),
-      change: t("news.vsPrevious", { pct: formatSigned(locale, scored.changePct, 2, "%"), day: fmtDate(scored.previousDate, { weekday: "long" }) }),
+      change: t("news.vsPrevious", { pct: formatSigned(numbers, scored.changePct, 2, "%"), day: fmtDate(scored.previousDate, { weekday: "long" }) }),
       changeTone: scored.changePct > 0 ? "up" : scored.changePct < 0 ? "down" : "flat",
       title: t(big ? "news.todayBig" : Math.abs(scored.sigma) >= 1 ? "news.todayBusy" : "news.todayNormal"),
-      why: t("news.todayWhy", { n: times(scored.sigma), vol: `${formatRate(locale, scored.vol30Pct, 1)}%` }),
-      badge: t(big ? "news.badgeBig" : "news.badgeNormal", { s: formatRate(locale, Math.abs(scored.sigma), 1) }),
+      why: t("news.todayWhy", { n: times(scored.sigma), vol: `${formatRate(numbers, scored.vol30Pct, 1)}%` }),
+      badge: t(big ? "news.badgeBig" : "news.badgeNormal", { s: formatRate(numbers, Math.abs(scored.sigma), 1) }),
       badgeTone: big ? "big" : "normal",
       articles: tw ? toArticles(tw.key) : [],
       note: tw
@@ -191,13 +191,13 @@ export default async function ForecastPage() {
       key,
       kicker: t("news.moveKicker", { date: dayMonthYear(m.date) }),
       rate: rate(m.rate),
-      change: t("news.inADay", { pct: formatSigned(locale, m.changePct, 2, "%") }),
+      change: t("news.inADay", { pct: formatSigned(numbers, m.changePct, 2, "%") }),
       changeTone: m.changePct > 0 ? "up" : "down",
-      title: t(m.changePct > 0 ? "news.moveUp" : "news.moveDown", { s: formatRate(locale, Math.abs(m.sigma), 1) }),
+      title: t(m.changePct > 0 ? "news.moveUp" : "news.moveDown", { s: formatRate(numbers, Math.abs(m.sigma), 1) }),
       why: t(m.changePct > 0 ? "news.moveWhyUp" : "news.moveWhyDown", {
-        pct: formatRate(locale, Math.abs(m.changePct), 2), n: times(m.sigma), vol: `${formatRate(locale, m.vol30Pct, 1)}%`,
+        pct: formatRate(numbers, Math.abs(m.changePct), 2), n: times(m.sigma), vol: `${formatRate(numbers, m.vol30Pct, 1)}%`,
       }),
-      badge: t("news.badgeBig", { s: formatRate(locale, Math.abs(m.sigma), 1) }),
+      badge: t("news.badgeBig", { s: formatRate(numbers, Math.abs(m.sigma), 1) }),
       badgeTone: "big",
       articles: w ? toArticles(key) : [],
       note: w ? (w.articles.length ? t("news.moveNote") : t("news.moveEmpty")) : t("news.moveNone"),
@@ -207,6 +207,7 @@ export default async function ForecastPage() {
 
   const chart: ChartData = {
     locale,
+    numberLocale: numbers,
     quote: r.quoteCurrency,
     history: points.map((p) => ({ day: toDay(p.date), rate: p.rate })),
     fan: (primary?.points ?? []).map((p) => ({
@@ -215,7 +216,7 @@ export default async function ForecastPage() {
     })),
     moves: (feed?.moves ?? []).map((m) => ({
       key: `move:${m.date}`, day: toDay(m.date), rate: m.rate,
-      aria: t("news.markerAria", { date: dayMonthYear(m.date), pct: formatSigned(locale, m.changePct, 2, "%") }),
+      aria: t("news.markerAria", { date: dayMonthYear(m.date), pct: formatSigned(numbers, m.changePct, 2, "%") }),
     })),
     labels: {
       today: t("fx.chartToday"),
@@ -241,7 +242,7 @@ export default async function ForecastPage() {
   const corr = gap?.correlation90d ?? null;
   const corrText = corr === null
     ? "—"
-    : t(Math.abs(corr) < 0.2 ? "fx.driverWeak" : corr > 0 ? "fx.driverWith" : "fx.driverOpposite", { r: formatSigned(locale, corr, 2) });
+    : t(Math.abs(corr) < 0.2 ? "fx.driverWeak" : corr > 0 ? "fx.driverWith" : "fx.driverOpposite", { r: formatSigned(numbers, corr, 2) });
   const corrClass = corr === null || Math.abs(corr) < 0.2 ? "muted" : corr > 0 ? "fx-with" : "fx-opposite";
 
   const driversCard = (
@@ -250,13 +251,13 @@ export default async function ForecastPage() {
           {gap ? (
             <>
               <div className="fx-driver">
-                <span>{t("fx.driverGap", { gap: formatRate(locale, gap.gapPts) })}</span>
+                <span>{t("fx.driverGap", { gap: formatRate(numbers, gap.gapPts) })}</span>
                 <strong className={corrClass}>{corrText}</strong>
               </div>
               <div className="fx-driver muted"><span>{t("fx.driverDxy")}</span><span>{t("fx.driverSoon")}</span></div>
               <div className="fx-driver muted"><span>{t("fx.driverInflation")}</span><span>{t("fx.driverSoon")}</span></div>
               <p className="fx-drivers__note">
-                {t("fx.driversNote", { mxn: formatRate(locale, gap.mxnRatePct), usd: formatRate(locale, gap.usdRatePct) })}
+                {t("fx.driversNote", { mxn: formatRate(numbers, gap.mxnRatePct), usd: formatRate(numbers, gap.usdRatePct) })}
               </p>
             </>
           ) : (

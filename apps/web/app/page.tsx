@@ -18,7 +18,7 @@ const toDay = (iso: string) => Math.round(Date.parse(`${iso}T00:00:00Z`) / DAY_M
  * "Ongoing conversions" card and, for admins, "Invite your team".
  */
 export default async function Dashboard({ searchParams }: { searchParams: Promise<{ welcome?: string; joined?: string }> }) {
-  const { tenant, profile, viewer, role, locale, t } = await getSession();
+  const { tenant, profile, viewer, role, locale, numbers, t } = await getSession();
   const { welcome, joined } = await searchParams;
 
   if (!tenant || !profile) {
@@ -56,7 +56,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
   const r = latest.data;
   const tz = profile.data.timeZone;
-  const rate = (v: number) => formatRate(locale, v);
+  const rate = (v: number) => formatRate(numbers, v);
   const fmtDate = (iso: string, opts: Intl.DateTimeFormatOptions) =>
     new Intl.DateTimeFormat(locale, { ...opts, timeZone: "UTC" }).format(new Date(`${iso}T00:00:00Z`));
 
@@ -99,8 +99,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       confidence,
       lines: [
         [
-          vsSma !== null ? t(vsSma >= 0 ? "dash.sig.aboveSma" : "dash.sig.belowSma", { pct: formatSigned(locale, Math.abs(vsSma), 1, "%").replace(/^[+-]/, "") }) : null,
-          vol30 !== null ? t(`dash.sig.vol.${level}` as MessageKey, { vol: `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(vol30)}%` }) : null,
+          vsSma !== null ? t(vsSma >= 0 ? "dash.sig.aboveSma" : "dash.sig.belowSma", { pct: formatSigned(numbers, Math.abs(vsSma), 1, "%").replace(/^[+-]/, "") }) : null,
+          vol30 !== null ? t(`dash.sig.vol.${level}` as MessageKey, { vol: `${new Intl.NumberFormat(numbers, { maximumFractionDigits: 1 }).format(vol30)}%` }) : null,
         ].filter(Boolean).join(" · "),
         t("dash.sig.range", {
           lo: rate(p30.lower80),
@@ -150,7 +150,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
               </span>
               <span className="dash-rate__value">
                 <strong>{rate(r.rate)}</strong>
-                {r.changePct !== null && <span>{formatSigned(locale, r.changePct, 2, "%")}</span>}
+                {r.changePct !== null && <span>{formatSigned(numbers, r.changePct, 2, "%")}</span>}
               </span>
               {history.ok && (
                 <RateGlance

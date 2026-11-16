@@ -13,6 +13,12 @@ if (builder.Configuration.GetValue("Platform:RunTenantSetup", true))
     builder.Services.AddHostedService<TenantSetupService>();
 }
 
+// Copies each company's sign-ins, invitations and role changes into its own audit log (tenant V0011).
+if (builder.Configuration.GetValue("Platform:MirrorControlAudit", true))
+{
+    builder.Services.AddHostedService<FxOs.Platform.Audit.ControlAuditMirrorService>();
+}
+
 var app = builder.Build();
 var settings = app.Services.GetRequiredService<PlatformSettings>();
 

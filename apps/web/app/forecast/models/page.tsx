@@ -12,7 +12,7 @@ const SOURCE = "banxico_fix";
 
 /** Model leaderboard (P4-04): every published model's walk-forward track record at one horizon, vs the naive benchmark. */
 export default async function ModelsPage({ searchParams }: { searchParams: Promise<{ h?: string }> }) {
-  const { tenant, profile, locale, t } = await getSession();
+  const { tenant, profile, locale, numbers, t } = await getSession();
   const crumbs = (
     <Breadcrumb
       label={t("breadcrumb.label")}
@@ -49,7 +49,7 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
     const key = `fx.model.${code}.name`;
     return isMessageKey(key) ? t(key) : fallback;
   };
-  const pct = (v: number) => `${new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(v * 100)}%`;
+  const pct = (v: number) => `${new Intl.NumberFormat(numbers, { maximumFractionDigits: 0 }).format(v * 100)}%`;
   const vsNaive = (v: number) => {
     const d = Math.round((v - 1) * 100);
     return `${d > 0 ? "+" : d < 0 ? "−" : "±"}${Math.abs(d)}%`;
@@ -93,10 +93,10 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
                         <span className="leaderboard__bar" aria-hidden="true">
                           <span style={{ width: `${(s.mae / worst) * 100}%` }} className={m.isBenchmark ? "is-benchmark" : undefined} />
                         </span>
-                        {formatRate(locale, s.mae)}
+                        {formatRate(numbers, s.mae)}
                       </span>
                     </td>
-                    <td className="num">{formatRate(locale, s.mape)}%</td>
+                    <td className="num">{formatRate(numbers, s.mape)}%</td>
                     <td className="num">{pct(s.coverage80)}</td>
                     <td className="num">{pct(s.coverage95)}</td>
                     <td className={`num ${m.isBenchmark ? "muted" : s.maeVsNaive < 1 ? "fx-better" : s.maeVsNaive > 1.005 ? "fx-worse" : "muted"}`}>
@@ -109,7 +109,7 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
           </div>
         </section>
         <p className="caption">
-          {first && `${t("models.n", { n: formatNumber(locale, first.n) })}. `}
+          {first && `${t("models.n", { n: formatNumber(numbers, first.n) })}. `}
           {anyEdge ? t("models.noteEdge") : t("models.note")}
         </p>
       </div>

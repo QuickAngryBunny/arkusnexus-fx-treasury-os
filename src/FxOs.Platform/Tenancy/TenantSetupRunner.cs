@@ -79,7 +79,7 @@ public sealed class TenantSetupRunner(
                 new NewInvitation(tenant.Id, InvitationKind.TenantSetup, email, name, MembershipRole.Admin), actor, ct);
             await outbox.EnqueueAsync(conn, tx, EmailTemplates.TenantSetupInvitation("es-MX", email,
                 new TenantSetupInvitationModel(tenant.Id, name, tenant.DisplayName, links.TenantSetup(issued.RawToken),
-                    issued.ExpiresAt, EmailClock.MexicoCity)), ct);
+                    issued.ExpiresAt, EmailClock.MexicoCity)), ct); // the company has not chosen a time zone yet (O-03)
             await conn.ExecAsync(
                 "update tenant set status = 'active', updated_at = now() where id = @id and status in ('provisioning', 'failed')",
                 new { id = tenant.Id }, tx, ct);

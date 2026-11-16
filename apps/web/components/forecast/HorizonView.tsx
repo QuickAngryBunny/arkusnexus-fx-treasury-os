@@ -62,6 +62,8 @@ export type NewsEvent = {
 
 export type ChartData = {
   locale: string;
+  /** Number formatting (the profile's number format); dates use `locale`. */
+  numberLocale: string;
   quote: string; // "MXN"
   history: { day: number; rate: number }[]; // day = days since 1970-01-01, oldest first
   /** Every published point of the headline model (7, 15, 30, 60, 90, 180 days), oldest first. */
@@ -122,7 +124,7 @@ export function RateChart({ data }: { data: ChartData }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const L = data.labels;
 
-  const nf = useMemo(() => new Intl.NumberFormat(data.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), [data.locale]);
+  const nf = useMemo(() => new Intl.NumberFormat(data.numberLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), [data.numberLocale]);
   const df = useMemo(() => new Intl.DateTimeFormat(data.locale, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }), [data.locale]);
   const tickFmt = useMemo(
     () => new Intl.DateTimeFormat(data.locale, horizon.days > 60 ? { month: "short", year: "2-digit", timeZone: "UTC" } : { day: "numeric", month: "short", timeZone: "UTC" }),

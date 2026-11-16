@@ -40,18 +40,31 @@ export function formatDateTime(locale: Locale, iso: string, timeZone: string): s
   return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short", timeZone }).format(new Date(iso));
 }
 
-export function formatNumber(locale: Locale, value: number): string {
+/**
+ * The locale numbers are formatted with: the user's number format (U-01) when they chose one, else the language's.
+ * Dates and words keep the language; only digit grouping and the decimal mark follow this.
+ */
+export type NumberLocale = string;
+export type NumberFormatPref = "period_decimal" | "comma_decimal";
+
+export function numberLocale(locale: Locale, format?: NumberFormatPref | null): NumberLocale {
+  if (format === "comma_decimal") return "de-DE"; // 1.234,56
+  if (format === "period_decimal") return "en-US"; // 1,234.56
+  return locale;
+}
+
+export function formatNumber(locale: NumberLocale, value: number): string {
   return new Intl.NumberFormat(locale).format(value);
 }
 
 /** Currency values (rates, amounts, errors in currency) are shown with 2 decimals; stored values keep full precision. */
 export const CURRENCY_DIGITS = 2;
 
-export function formatRate(locale: Locale, value: number, digits = CURRENCY_DIGITS): string {
+export function formatRate(locale: NumberLocale, value: number, digits = CURRENCY_DIGITS): string {
   return new Intl.NumberFormat(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value);
 }
 
-export function formatSigned(locale: Locale, value: number, digits: number, suffix = ""): string {
+export function formatSigned(locale: NumberLocale, value: number, digits: number, suffix = ""): string {
   const text = new Intl.NumberFormat(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits, signDisplay: "exceptZero" }).format(value);
   return text + suffix;
 }
@@ -62,7 +75,7 @@ export function formatDate(locale: Locale, isoDate: string, style: "medium" | "l
 }
 
 /** An amount always with its currency code (house rule), e.g. "USD 1,707,450.00". */
-export function formatMoney(locale: Locale, amount: number, currency: string, digits = CURRENCY_DIGITS): string {
+export function formatMoney(locale: NumberLocale, amount: number, currency: string, digits = CURRENCY_DIGITS): string {
   const n = new Intl.NumberFormat(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(amount);
   return `${currency} ${n}`;
 }

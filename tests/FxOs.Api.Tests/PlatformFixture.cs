@@ -154,6 +154,7 @@ public sealed class FxApiFactory(string controlPlane, string server) : WebApplic
         builder.UseSetting("Platform:MigrateControlPlaneOnStartup", "true");
         // Tests drive tenant setup step by step (TenantSetupRunner.RunOnceAsync).
         builder.UseSetting("Platform:RunTenantSetup", "false");
+        builder.UseSetting("Platform:MirrorControlAudit", "false");
     }
 }
 

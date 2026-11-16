@@ -49,7 +49,7 @@ public sealed record ResetLinkInfo(TokenState State, string? Email, string? Disp
 /// </summary>
 public sealed class PasswordResetService(
     ControlPlaneDb controlPlane, IdentityStore identity, IPasswordHasher hasher, EmailOutbox outbox, AppLinks links,
-    TimeProvider time)
+    TimeProvider time, EmailClocks clocks)
 {
     public static readonly TimeSpan ResendCooldown = TimeSpan.FromSeconds(60);
 
@@ -97,9 +97,10 @@ public sealed class PasswordResetService(
         }
 
         var issued = await identity.IssuePasswordResetAsync(conn, tx, account.Id, ct);
+        var clock = await clocks.ForUserAsync(account.Id, account.TenantId, ct);
         await outbox.EnqueueAsync(conn, tx, EmailTemplates.PasswordReset(locale, account.Email,
             new PasswordResetModel(account.TenantId, account.DisplayName, account.Email, links.ResetPassword(issued.RawToken), now,
-                EmailClock.MexicoCity)), ct);
+                clock)), ct);
         await tx.CommitAsync(ct);
         return true;
     }
@@ -145,8 +146,9 @@ public sealed class PasswordResetService(
         {
             var account = await conn.QuerySingleAsync<(string Email, string DisplayName)>(new CommandDefinition(
                 "select email, display_name from user_account where id = @userId", new { userId }, tx, cancellationToken: token));
+            var clock = await clocks.ForUserAsync(userId, null, token);
             await outbox.EnqueueAsync(conn, tx, EmailTemplates.PasswordChanged(locale, account.Email,
-                new PasswordChangedModel(null, account.DisplayName, account.Email, time.GetUtcNow(), EmailClock.MexicoCity,
+                new PasswordChangedModel(null, account.DisplayName, account.Email, time.GetUtcNow(), clock,
                     links.ForgotPassword)), token);
         }, ct);
 
