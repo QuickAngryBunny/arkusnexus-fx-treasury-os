@@ -116,9 +116,21 @@ public static class PlatformServiceCollectionExtensions
         services.AddSingleton(email);
         services.AddDataProtection().SetApplicationName("FxOs");
         services.AddSingleton<EmailOutbox>();
-        services.TryAddSingleton<IMailTransport, FirestoreMailTransport>();
+        if (email.Transport == EmailTransport.Smtp)
+        {
+            services.TryAddSingleton<IMailTransport, SmtpMailTransport>();
+        }
+        else if (email.Transport == EmailTransport.Firebase)
+        {
+            services.TryAddSingleton<IMailTransport, FirestoreMailTransport>();
+        }
+        else
+        {
+            throw new InvalidOperationException($"Email:Transport '{email.Transport}' is unknown (firebase or smtp).");
+        }
+
         services.AddSingleton<EmailDispatcher>();
-        if (email.Dispatcher.Enabled && email.Firebase.IsConfigured)
+        if (email.Dispatcher.Enabled && email.IsConfigured)
         {
             services.AddHostedService<EmailDispatcherService>();
         }

@@ -68,7 +68,7 @@ public static class DevEndpoints
             {
                 id,
                 allowed = email.IsAllowed(body.To),
-                dispatcherRunning = email.Dispatcher.Enabled && email.Firebase.IsConfigured,
+                dispatcherRunning = email.Dispatcher.Enabled && email.IsConfigured,
             });
         });
 

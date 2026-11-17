@@ -137,7 +137,7 @@ public sealed class EmailDispatcher(
     }
 }
 
-/// <summary>Runs <see cref="EmailDispatcher"/> on a timer. Registered only when Email:Dispatcher:Enabled and Firebase are set.</summary>
+/// <summary>Runs <see cref="EmailDispatcher"/> on a timer. Registered only when Email:Dispatcher:Enabled and the chosen transport (Firebase or SMTP) is configured.</summary>
 public sealed class EmailDispatcherService(EmailDispatcher dispatcher, EmailSettings settings, ILogger<EmailDispatcherService> logger)
     : BackgroundService
 {

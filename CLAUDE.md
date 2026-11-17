@@ -28,8 +28,8 @@ MFA/two-step verification.
 - Railway (README, 2026-11-17): Postgres + api (`deploy/api.Dockerfile`, default stage, Migrator bundled at
   `/app/migrator` for the pre-deploy `tenants` step) + workers (`deploy/workers.Dockerfile`, default `rates schedule`,
   raw store on a volume via `FX_RAW_STORE_DIR`) + web (`next start` on `$PORT`). Runs as `ASPNETCORE_ENVIRONMENT=Internal`
-  because the Python worker reads tenant passwords only from the control-plane dev secret store; Firebase email there
-  needs a service-account key (blocked by the org today).
+  because the Python worker reads tenant passwords only from the control-plane dev secret store; email there goes
+  through SMTP (`Email__Transport=smtp`).
 - Cloud SQL has no TimescaleDB: the migration runner skips `create extension … timescaledb` and `create_hypertable(…)`
   on a server without it (`CloudSqlCompatibilityTests` runs every migration on plain PostgreSQL 17). New migrations must
   be plain PostgreSQL; no Timescale functions in queries. Locally the Timescale image still works.
@@ -40,7 +40,9 @@ MFA/two-step verification.
 - Roles per tenant membership: `admin`, `approver`, `standard`. Only admins see Team, invite, change roles, edit banks.
 - Email: Firebase is only the sender (Trigger Email extension, Firestore `mail` collection). Firebase does no auth and
   holds no user data. Locally the API writes to the real Firebase project (test addresses only); the service-account
-  key stays outside the repo (hosted: the Cloud Run service account, no key).
+  key stays outside the repo (hosted: the Cloud Run service account, no key). Hosts without Google credentials
+  (Railway) use `Email:Transport=smtp` instead (`SmtpMailTransport`, MailKit; e.g. Gmail with an app password;
+  Message-ID = `<outbox id>@fxos`); same outbox, retries and allowlist.
 - Rate alerts are Phase 4 (the plan's "rate reached target" email moved there); conversion plans Phase 5 add plan
   alerts on top; AI in Phase 6. LLM: Azure OpenAI, GPT‑6.1 Terra (Phase 6).
 

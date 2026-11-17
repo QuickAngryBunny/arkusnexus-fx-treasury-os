@@ -3,7 +3,7 @@
 A USD/MXN exchange-rate platform for companies that convert between pesos and dollars. Built first for Arkus Nexus,
 designed as multi-tenant SaaS: every company gets its own PostgreSQL database.
 
-## What it does today
+## Features
 
 - **Exchange Forecast**: today's Banxico FIX, trend and volatility; 7- to 180-day forecasts with 80% and 95% ranges;
   a chart of the past against the forecast, including how far earlier forecasts missed; big daily moves with the news
@@ -17,9 +17,6 @@ designed as multi-tenant SaaS: every company gets its own PostgreSQL database.
   creating companies.
 - Spanish and English throughout.
 
-Coming next: conversion plans (Phase 5) and an AI assistant (Phase 6). Treasury, exposure, cash flow, billing and
-self-serve sign-up are out of scope.
-
 ## Tech stack
 
 | Part | Technology |
@@ -29,7 +26,7 @@ self-serve sign-up are out of scope.
 | API | .NET 10 minimal APIs, Dapper, Npgsql; Argon2id passwords, HTTP-only session cookies |
 | Databases | PostgreSQL 17: a control-plane database (`fx_control`) plus one database and login per company; versioned SQL migrations in `db/` |
 | Workers | Python 3.13 (`fxworkers`): Banxico FIX and interest-rate curves, forecasts and backtests, GNews headlines |
-| Email | Firebase Trigger Email (Firestore `mail` collection), fed by an encrypted outbox in the control plane |
+| Email | An encrypted outbox in the control plane, sent through Firebase Trigger Email (locally) or any SMTP server (hosted, e.g. Gmail) |
 | Tests | xUnit + Testcontainers, pytest, `tsc` |
 
 The browser only talks to the Next.js server; the Next.js server calls the API; only the workers call outside data
@@ -44,7 +41,7 @@ src/FxOs.Migrator/ CLI: migrations, platform admin, tenant maintenance
 workers/python/    fxworkers: rates, curves, forecasts, news, tenant setup jobs
 db/                SQL migrations (control plane and tenant)
 deploy/            Dockerfiles for the API/Migrator and the workers
-docs/              Operations guide, decisions, Phase 3 brief
+docs/              Operations guide, architecture decisions, product brief
 ```
 
 ## Run it locally
@@ -83,7 +80,7 @@ Sign in at http://localhost:3000 with "Forgot password?" to set your password, o
 setup invitation goes to the company's first admin, who sets a password and adds the company's banks.
 
 Email goes through Firebase. Locally, the API only sends to `Email:AllowedRecipients`; see
-[Email through Firebase](docs/operations.md#email-through-firebase-phase-3) for the one-time setup with your Google
+[Email through Firebase](docs/operations.md#email-through-firebase) for the one-time setup with your Google
 account. After pulling new code, apply tenant migrations with `dotnet run --project src/FxOs.Migrator -- tenants`.
 
 Tests:
@@ -104,10 +101,11 @@ others talk over Railway's private network.
 - **Environment.** Run the API with `ASPNETCORE_ENVIRONMENT=Internal`. Other environments require Google Secret
   Manager for tenant database passwords, which the Python worker can't read yet. In `Internal`, those passwords live in
   the control-plane database.
-- **Email is required.** The first admin's password and every company's setup invitation arrive by email. The API sends
-  through Firebase and needs a Google credential. On Railway that is a service-account key file, and the Arkus Nexus
-  Google organization currently blocks key creation. Until a key, or another sender, is available, emails wait in the
-  outbox, so nobody can finish signing up.
+- **Email goes through SMTP.** The first admin's password and every company's setup invitation arrive by email.
+  On Railway the API sends straight to an SMTP server (`Email__Transport=smtp`), because Firebase would need a Google
+  key file. A Gmail or Google Workspace account with an
+  [app password](https://support.google.com/accounts/answer/185833) works (it needs 2-Step Verification on; Gmail
+  allows about 500 emails a day). Any other SMTP service (SendGrid, Postmark, Resend, Amazon SES) works the same way.
 - **No TimescaleDB.** Railway's PostgreSQL doesn't have it; the migrations skip those two statements automatically.
 
 ### 1. PostgreSQL
@@ -133,8 +131,13 @@ New service from this GitHub repository (root directory: the repo root).
   ConnectionStrings__ControlPlane=Host=${{Postgres.PGHOST}};Port=${{Postgres.PGPORT}};Database=fx_control;Username=${{Postgres.PGUSER}};Password=${{Postgres.PGPASSWORD}}
   TenantServers__default=Host=${{Postgres.PGHOST}};Port=${{Postgres.PGPORT}};Username=${{Postgres.PGUSER}};Password=${{Postgres.PGPASSWORD}}
   App__PublicBaseUrl=https://${{web.RAILWAY_PUBLIC_DOMAIN}}/
-  Email__Firebase__ProjectId=<your Firebase project id>
-  Email__Firebase__CredentialsFile=<path to the service-account key file, see "Before you start">
+  Email__Transport=smtp
+  Email__Smtp__Host=smtp.gmail.com
+  Email__Smtp__Port=587
+  Email__Smtp__Username=<the sending Gmail address>
+  Email__Smtp__Password=<its app password>
+  Email__Smtp__FromAddress=<the sending Gmail address>
+  Email__Smtp__FromName=FX Intelligence
   Email__Dispatcher__Enabled=true
   Email__AllowedRecipients__0=*@yourcompany.com
   RAILWAY_RUN_UID=0
@@ -142,6 +145,8 @@ New service from this GitHub repository (root directory: the repo root).
 
 - **Pre-deploy command:** `dotnet /app/migrator/FxOs.Migrator.dll tenants`. It migrates the control plane and every
   company database before each release.
+  `Email__AllowedRecipients__0` limits who gets email (add `__1`, `__2`… for more addresses or `*@domain`s). Set
+  `Email__AllowAllRecipients=true` instead once real customers sign up.
 - **Volume:** mount one at `/home/app/.aspnet/DataProtection-Keys`, so the keys that encrypt queued emails survive
   redeploys. `RAILWAY_RUN_UID=0` above lets the service write to it.
 - **Networking:** no public domain. The web app reaches the API on port 8080 over the private network.
@@ -204,5 +209,5 @@ A new deployment starts with no companies and no dummy data.
 
 - [docs/operations.md](docs/operations.md): how each part works (rates, forecasts, news, alerts, sign-in, email, the
   admin portal, Google Cloud hosting) and every command.
-- [CLAUDE.md](CLAUDE.md): decisions, conventions and the status of each phase.
+- [CLAUDE.md](CLAUDE.md): decisions, conventions and project status.
 - [ADR 0001](docs/decisions/0001-database-per-tenant.md): why each company has its own database.

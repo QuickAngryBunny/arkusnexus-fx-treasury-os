@@ -5,7 +5,18 @@ public sealed class EmailSettings
 {
     public const string Section = "Email";
 
+    /// <summary>
+    /// Who sends: "firebase" (the Trigger Email extension, needs Google credentials) or "smtp" (any SMTP server, e.g.
+    /// Gmail with an app password; works on hosts without Google credentials, such as Railway).
+    /// </summary>
+    public string Transport { get; set; } = EmailTransport.Firebase;
+
     public FirebaseSettings Firebase { get; set; } = new();
+
+    public SmtpSettings Smtp { get; set; } = new();
+
+    /// <summary>Whether the chosen transport has what it needs to send.</summary>
+    public bool IsConfigured => Transport == EmailTransport.Smtp ? Smtp.IsConfigured : Firebase.IsConfigured;
 
     public DispatcherSettings Dispatcher { get; set; } = new();
 
@@ -61,6 +72,34 @@ public sealed class FirebaseSettings
     public string Collection { get; set; } = "mail";
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(ProjectId);
+}
+
+public static class EmailTransport
+{
+    public const string Firebase = "firebase";
+    public const string Smtp = "smtp";
+}
+
+public sealed class SmtpSettings
+{
+    public string Host { get; set; } = "";
+
+    public int Port { get; set; } = 587;
+
+    /// <summary>"starttls" (port 587, the default), "ssl" (port 465) or "none" (local test servers only).</summary>
+    public string Security { get; set; } = "starttls";
+
+    /// <summary>Empty for servers that don't ask for a login.</summary>
+    public string Username { get; set; } = "";
+
+    /// <summary>For Gmail, an app password. Keep it in a secret / host variable, never in the repo.</summary>
+    public string Password { get; set; } = "";
+
+    public string FromAddress { get; set; } = "";
+
+    public string FromName { get; set; } = "FX Intelligence";
+
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(Host) && !string.IsNullOrWhiteSpace(FromAddress);
 }
 
 public sealed class DispatcherSettings

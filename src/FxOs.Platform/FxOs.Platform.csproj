@@ -10,6 +10,7 @@
     <PackageReference Include="Dapper" />
     <PackageReference Include="Konscious.Security.Cryptography.Argon2" />
     <PackageReference Include="Google.Cloud.Firestore" />
+    <PackageReference Include="MailKit" />
     <PackageReference Include="Google.Cloud.SecretManager.V1" />
   </ItemGroup>
 

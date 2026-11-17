@@ -180,7 +180,7 @@ reached". The API checks alerts every minute against the newest FIX and forecast
 emails only the person who set them. Apply tenant migrations after pulling (`dotnet run --project src/FxOs.Migrator --
 tenants`).
 
-## Email through Firebase (Phase 3)
+## Email through Firebase
 
 The API writes each email to the control-plane outbox (`email_outbox`, body encrypted with ASP.NET Data Protection)
 in the same transaction as the change that sends it. A background dispatcher hands due emails to the Firebase
@@ -203,7 +203,14 @@ dotnet user-secrets set "Email:Firebase:ProjectId" "fx-treasury"
 dotnet user-secrets set "Email:AllowedRecipients:0" "you@yourcompany.com"
 ```
 
-`Email:Firebase:CredentialsFile` stays empty (it exists for environments that do use a key). With
+`Email:Firebase:CredentialsFile` stays empty (it exists for environments that do use a key).
+
+**SMTP instead of Firebase** (`Email:Transport=smtp`, for hosts without Google credentials such as Railway): the
+dispatcher sends each email straight to an SMTP server with MailKit (`SmtpMailTransport`). Settings:
+`Email:Smtp:Host`, `Port` (587), `Security` (`starttls`, `ssl` for 465, `none` for local test servers), `Username`,
+`Password`, `FromAddress`, `FromName`. With Gmail, use an app password on the sending account. SMTP has no
+idempotency key, so the Message-ID is derived from the outbox id (`<id>@fxos`): a retry after a lost acknowledgement
+carries the same Message-ID. Everything else (outbox, encryption, retries, allowlist) is the same as with Firebase. With
 `Email:Dispatcher:Enabled` (on in Development) and a project id set, the API starts the dispatcher. Try it with
 `curl -X POST localhost:5080/api/dev/email/test -H 'content-type: application/json' -d '{"to":"you@yourcompany.com"}'`,
 then check `email_outbox.status` and the extension's `delivery.state` on the Firestore `mail` document.
