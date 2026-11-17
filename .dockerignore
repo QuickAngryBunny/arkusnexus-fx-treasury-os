@@ -1,0 +1,15 @@
+# Keeps build contexts small and secrets out of images.
+**/node_modules
+**/.next
+**/.next-*
+**/bin
+**/obj
+**/.venv
+**/__pycache__
+**/*.egg-info
+**/.env
+**/.env.*
+!**/.env.example
+.git
+memory
+docs

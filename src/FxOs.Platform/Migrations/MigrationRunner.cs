@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Dapper;
 using FxOs.Platform.Data;
 using Microsoft.Extensions.Logging;
@@ -8,10 +9,24 @@ namespace FxOs.Platform.Migrations;
 /// <summary>
 /// Applies pending migrations of one set to one database. Each migration runs in its own transaction,
 /// an advisory lock stops two runners from racing, and a changed file that was already applied is refused.
+/// On a server without TimescaleDB (Cloud SQL for PostgreSQL), the two TimescaleDB statements early tenant
+/// migrations use are skipped, so those tables stay plain tables; the checksum is still the file's own.
+/// New migrations must be plain PostgreSQL.
 /// </summary>
-public static class MigrationRunner
+public static partial class MigrationRunner
 {
     private const long LockKey = 7_270_001;
+
+    [GeneratedRegex(@"^\s*create extension if not exists timescaledb\s*;[^\S\n]*$", RegexOptions.IgnoreCase | RegexOptions.Multiline)]
+    private static partial Regex TimescaleExtension();
+
+    [GeneratedRegex(@"^\s*select create_hypertable\([^;]*\)\s*;[^\S\n]*$", RegexOptions.IgnoreCase | RegexOptions.Multiline)]
+    private static partial Regex CreateHypertable();
+
+    /// <summary>The SQL to run: unchanged with TimescaleDB, without its two statements otherwise.</summary>
+    public static string ForServer(string sql, bool timescale) =>
+        timescale ? sql : CreateHypertable().Replace(TimescaleExtension().Replace(sql, "-- (TimescaleDB not available: skipped)"),
+            "-- (TimescaleDB not available: plain table)");
 
     public static async Task<int> RunAsync(NpgsqlConnection conn, string set, ILogger? log = null, CancellationToken ct = default)
     {
@@ -25,6 +40,9 @@ public static class MigrationRunner
                 applied_at  timestamptz not null default now()
             )
             """, ct: ct);
+
+        var timescale = await conn.ExecuteScalarAsync<bool>(new CommandDefinition(
+            "select exists (select 1 from pg_available_extensions where name = 'timescaledb')", cancellationToken: ct));
 
         await conn.ExecAsync("select pg_advisory_lock(@key)", new { key = LockKey }, ct: ct);
         try
@@ -48,7 +66,7 @@ public static class MigrationRunner
                 }
 
                 await using var tx = await conn.BeginTransactionAsync(ct);
-                await using (var cmd = new NpgsqlCommand(migration.Sql, conn, tx))
+                await using (var cmd = new NpgsqlCommand(ForServer(migration.Sql, timescale), conn, tx))
                 {
                     await cmd.ExecuteNonQueryAsync(ct);
                 }

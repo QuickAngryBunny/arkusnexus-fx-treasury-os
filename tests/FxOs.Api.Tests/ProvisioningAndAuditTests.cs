@@ -54,13 +54,13 @@ public sealed class ProvisioningAndAuditTests(PlatformFixture fx)
         var client = fx.Client();
 
         var created = await client.SendAsync(
-            PlatformFixture.Request(HttpMethod.Post, "/api/tenant/departments", tenant.Slug, new { name = "Finanzas" }));
-        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+            PlatformFixture.Request(HttpMethod.Post, "/api/tenant/rates/banxico_fix/sync-requests", tenant.Slug, new { }));
+        Assert.Equal(HttpStatusCode.Accepted, created.StatusCode);
 
         var auditResponse = await client.SendAsync(PlatformFixture.Request(HttpMethod.Get, "/api/tenant/audit", tenant.Slug));
         var audit = await auditResponse.Content.ReadFromJsonAsync<JsonElement>();
         var actions = audit.EnumerateArray().Select(e => e.GetProperty("action").GetString()).ToList();
-        Assert.Contains("department.created", actions);
+        Assert.Contains("rates.sync_requested", actions);
         Assert.Contains("tenant.provisioned", actions);
 
         await using var conn = await OpenAsTenantAsync(tenant);
@@ -70,6 +70,34 @@ public sealed class ProvisioningAndAuditTests(PlatformFixture fx)
             await cmd.ExecuteNonQueryAsync();
         });
         Assert.Contains("append-only", ex.MessageText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Treasury_tables_are_gone_from_tenant_databases()
+    {
+        // Phase 3 scope: no treasury, legal entities or departments (V0008). Rates, forecasts and news stay.
+        var tenant = await fx.ProvisionAsync("scope");
+        await using var conn = await OpenAsTenantAsync(tenant);
+        await using var cmd = new NpgsqlCommand(
+            "select table_name from information_schema.tables where table_schema = 'public'", conn);
+        var tables = new List<string>();
+        await using (var reader = await cmd.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+            {
+                tables.Add(reader.GetString(0));
+            }
+        }
+
+        foreach (var removed in new[] { "financial_transaction", "bank_account", "legal_entity", "department" })
+        {
+            Assert.DoesNotContain(removed, tables);
+        }
+
+        foreach (var kept in new[] { "tenant_settings", "user_profile", "bank", "notification_preference", "audit_log", "fx_rate", "forecast_run", "news_article" })
+        {
+            Assert.Contains(kept, tables);
+        }
     }
 
     private async Task<NpgsqlConnection> OpenAsTenantAsync(TenantRecord tenant)

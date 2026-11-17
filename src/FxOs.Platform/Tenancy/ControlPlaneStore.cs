@@ -7,7 +7,7 @@ namespace FxOs.Platform.Tenancy;
 public sealed class ControlPlaneStore(ControlPlaneDb controlPlane)
 {
     private const string SelectTenant = """
-        select t.id, t.slug, t.display_name, t.status, t.is_dummy,
+        select t.id, t.slug, t.display_name, t.status, t.is_dummy, t.created_at,
                d.server_key, d.database_name, d.login_role, d.secret_ref, d.schema_version
         from tenant t
         left join tenant_database d on d.tenant_id = t.id
@@ -18,6 +18,13 @@ public sealed class ControlPlaneStore(ControlPlaneDb controlPlane)
         await using var conn = await controlPlane.OpenAsync(ct);
         return await conn.QuerySingleOrDefaultAsync<TenantRecord>(
             new CommandDefinition(SelectTenant + " where t.slug = @slug", new { slug }, cancellationToken: ct));
+    }
+
+    public async Task<TenantRecord?> FindByIdAsync(Guid id, CancellationToken ct = default)
+    {
+        await using var conn = await controlPlane.OpenAsync(ct);
+        return await conn.QuerySingleOrDefaultAsync<TenantRecord>(
+            new CommandDefinition(SelectTenant + " where t.id = @id", new { id }, cancellationToken: ct));
     }
 
     public async Task<IReadOnlyList<TenantRecord>> ListAsync(CancellationToken ct = default)

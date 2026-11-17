@@ -8,6 +8,7 @@ TestResults/
 # Node / Next.js
 node_modules/
 .next/
+.next-*/
 out/
 *.tsbuildinfo
 
@@ -27,5 +28,6 @@ __pycache__/
 !.vscode/extensions.json
 .DS_Store
 
-# Local dev logs
+# Local dev logs and raw-store directory
 .logs/
+.raw-store/

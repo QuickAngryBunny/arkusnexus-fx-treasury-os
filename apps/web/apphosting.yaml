@@ -1,0 +1,21 @@
+# Firebase App Hosting for the Next.js app (create the backend with root directory `apps/web`; the pnpm workspace
+# root is two levels up and @fxos/ui is compiled with the app). Not deployed yet: development runs locally.
+# https://firebase.google.com/docs/app-hosting/configure
+
+runConfig:
+  minInstances: 0
+  maxInstances: 4
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
+  # The API runs on Cloud Run with internal ingress only; the web app reaches it through the VPC.
+  # vpcAccess:
+  #   egress: PRIVATE_RANGES_ONLY
+  #   connector: projects/PROJECT_ID/locations/REGION/connectors/fxos-connector
+
+env:
+  # Server-side only: the browser never calls the API directly.
+  - variable: FX_API_BASE_URL
+    value: https://fxos-api-REPLACE.a.run.app
+    availability:
+      - RUNTIME

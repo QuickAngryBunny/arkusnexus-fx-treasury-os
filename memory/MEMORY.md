@@ -1,0 +1,2 @@
+- [Dev stack ports belong to user](dev-stack-ports-belong-to-user.md) — 3000/5080 are usually ./scripts/dev.sh; never kill them
+- [Hosting plan](hosting-plan.md) — local dev now; Firebase/Google Cloud target, Railway documented; no cloud provisioning

@@ -9,10 +9,13 @@ description = "FX Intelligence & Treasury OS data workers: dummy-data seeding (P
 requires-python = ">=3.12"
 dependencies = [
     "psycopg[binary]>=3.2",
+    "azure-storage-blob>=12.19",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+# Hosted on Google Cloud: the raw store in Cloud Storage (FX_RAW_STORE_URL=gs://…).
+gcp = ["google-cloud-storage>=2.18"]
 
 [project.scripts]
 fxworkers = "fxworkers.cli:main"

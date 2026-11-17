@@ -1,23 +1,55 @@
 # CLAUDE.md — FX Intelligence & Treasury OS
 
-Read this first. It holds the decisions and conventions agreed so far; the README has run commands.
+Read this first. It holds the decisions and conventions agreed so far; the README has the summary, local run and
+Railway deploy steps; `docs/operations.md` has how each part works and every command.
 
 ## Product
-Enterprise FX and treasury platform. Built first for Arkus Nexus (USD/MXN exposure), later multi-tenant SaaS.
-- PRD: project doc "FX intelligence 1.docx" (modules 01–11, phases 1–6).
+USD/MXN exchange-rate platform. Built first for Arkus Nexus, later multi-tenant SaaS.
+Scope (narrowed, see `docs/phase-3-brief.md`): rate history and forecast + news (Phases 0–2), accounts/team/tenant admin
+(Phase 3), rate alerts with trend early warnings (Phase 4), conversion plans as the main action (Phase 5), AI assistant
+(Phase 6). **Out of scope — don't build or
+scaffold:** treasury, currency exposure, cash flow, simulator, profitability, billing/subscriptions, self-serve sign-up,
+MFA/two-step verification.
+- PRD: project doc "FX intelligence 1.docx" (modules 01–11; narrowed by the Phase 3 brief).
 - Build plan (phases 0–6, sprints, exit criteria): https://claude.ai/artifact/UvdTvey4XkCdchDU65Mat4
-- Design canvas / prototype (screen reference, Violeta components page): https://claude.ai/code/artifact/f8510a18-6085-4aa2-bb6b-6226f7065c56
+- Design canvas with user journeys + clickable prototype (screen codes O-*, T-*, A-*, U-*, C-*): https://claude.ai/artifact/XfTxqdpgPriSXYT9Du7MHw
+- Earlier design canvas (R-*, P*-* artboards, Violeta components page): https://claude.ai/code/artifact/f8510a18-6085-4aa2-bb6b-6226f7065c56
+- Architecture whiteboard: https://claude.ai/artifact/GSGKEGsD7SZZXirjqLFeTw
 - One developer, one-week sprints.
 
 ## Rollout rules (do not break)
 - Phases 0–2: internal environment only, dummy tenants and dummy company data. Only public exchange rates are real.
-- Phase 3 adds sign-up, sign-in and MFA, then Arkus Nexus loads real data. Nothing real before that passes.
-- Phase 6: billing/subscriptions and other companies. Two roles only: `standard` and `admin`; only admins manage billing.
-- Rate alerts (threshold email) ship in Phase 2; AI-driven alerts in Phase 5. LLM: Azure OpenAI, GPT‑6.1 Terra (Phase 5).
+- Hosting target (changed 2026-11-16): Firebase on Google Cloud, not Azure. App Hosting for the Next.js app
+  (`apps/web/apphosting.yaml`), Cloud Run for the API (`deploy/api.Dockerfile`, target `api`), the Migrator (target
+  `migrator`, a job before each release) and the Python workers (`deploy/workers.Dockerfile`), Cloud SQL for PostgreSQL,
+  Cloud Storage for the raw store (`FX_RAW_STORE_URL=gs://…`), Secret Manager (`Secrets:Provider=google`,
+  `Secrets:Google:ProjectId`; any non-internal environment requires it and refuses the dev switcher). Development
+  still runs locally (through Phase 4); don't provision cloud resources (projects, networks, buckets, deploy workflows).
+- Railway (README, 2026-11-17): Postgres + api (`deploy/api.Dockerfile`, default stage, Migrator bundled at
+  `/app/migrator` for the pre-deploy `tenants` step) + workers (`deploy/workers.Dockerfile`, default `rates schedule`,
+  raw store on a volume via `FX_RAW_STORE_DIR`) + web (`next start` on `$PORT`). Runs as `ASPNETCORE_ENVIRONMENT=Internal`
+  because the Python worker reads tenant passwords only from the control-plane dev secret store; email there goes
+  through SMTP (`Email__Transport=smtp`).
+- Cloud SQL has no TimescaleDB: the migration runner skips `create extension … timescaledb` and `create_hypertable(…)`
+  on a server without it (`CloudSqlCompatibilityTests` runs every migration on plain PostgreSQL 17). New migrations must
+  be plain PostgreSQL; no Timescale functions in queries. Locally the Timescale image still works.
+- Phase 3 gate (private network only, backups, encryption, Secret Manager, restore drill, security review) comes with
+  the hosting work. Sign-in is the app's own email + password (Argon2id/bcrypt hash in the control plane, HTTP-only session
+  cookies, 15-minute lock). No MFA, no outside identity provider. Tenants are created by internal tenant admins (no self-serve sign-up).
+  Arkus Nexus loads real data only after the gate passes.
+- Roles per tenant membership: `admin`, `approver`, `standard`. Only admins see Team, invite, change roles, edit banks.
+- Email: Firebase is only the sender (Trigger Email extension, Firestore `mail` collection). Firebase does no auth and
+  holds no user data. Locally the API writes to the real Firebase project (test addresses only); the service-account
+  key stays outside the repo (hosted: the Cloud Run service account, no key). Hosts without Google credentials
+  (Railway) use `Email:Transport=smtp` instead (`SmtpMailTransport`, MailKit; e.g. Gmail with an app password;
+  Message-ID = `<outbox id>@fxos`); same outbox, retries and allowlist.
+- Rate alerts are Phase 4 (the plan's "rate reached target" email moved there); conversion plans Phase 5 add plan
+  alerts on top; AI in Phase 6. LLM: Azure OpenAI, GPT‑6.1 Terra (Phase 6).
 
 ## Architecture (ADR 0001: docs/decisions/0001-database-per-tenant.md)
-- One PostgreSQL + TimescaleDB database and login role per tenant, including its own copy of rate history.
-  Control plane (`fx_control`) holds only tenants, routing, schema version (identities/subscriptions later).
+- One PostgreSQL database (Cloud SQL hosted; TimescaleDB image locally) and login role per tenant, including its own copy of rate history.
+  Control plane (`fx_control`) holds only tenants, routing, schema version, and (Phase 3) identities, memberships,
+  invitations, password resets and sessions. Store only token hashes, never raw tokens.
 - Web (Next.js) → .NET 10 API only; the browser never calls the API directly (server components/actions).
 - User-facing queries never call external data APIs; only ingestion workers do (Phase 1, raw store in Blob, per-tenant fan-out).
 - Financial calculations are deterministic services; the LLM never computes money values.
@@ -31,20 +63,159 @@ Enterprise FX and treasury platform. Built first for Arkus Nexus (USD/MXN exposu
 - Money: always keep original currency and amount; a converted value stores the applied rate, source and time.
 - Every new tenant feature gets a cross-tenant test. Dummy data only via `workers/python` (refuses non-dummy tenants).
 - Spanish and English from the first screen; currency always shown with its code.
+- Display currency values (amounts, exchange rates, errors in currency) with 2 decimals via `formatMoney`/`formatRate`
+  (`CURRENCY_DIGITS` in `apps/web/lib/i18n.ts`); storage and calculations keep full precision. Pass them `numbers`
+  from `getSession()` (the profile's number format, U-01), not `locale`; dates and words keep `locale`.
 
 ## UI decisions
 - "Violeta" direction: violet/plum, rounded cards, based on the reference mobile app; font **Manrope** (not Urbanist).
 - Inner pages: breadcrumb above the title, no back buttons.
-- Main menu section "Forecast Intelligence" combines rate history, forecast and market intelligence: current rate,
+- Main menu section "Exchange Forecast" (ES "Pronóstico cambiario"; formerly Forecast Intelligence) combines rate history, forecast and market intelligence: current rate,
   trend and volatility up front; forecast ahead; past rates with the reason they moved; full history by year/month/day
   with gap/duplicate fixes and manual source sync.
 
 ## Status
-- Phase 0 sprint 1 done (CI green: 14 API tests, web build, 4 Python tests).
-- Next — sprint 2: Violeta component library in `packages/ui` (Button, Badge, Field, Switch, Segmented, StatCard,
-  AlertBanner, PageHeader, Breadcrumb, AppNav with user menu), app shell, ES/EN message catalogs; replace the
-  placeholder tokens in `apps/web/app/globals.css`.
-- Sprint 3: Azure internal environment, deploy workflow running per-tenant migrations, OpenTelemetry (tenant id tag),
-  Grafana, split migration-owner vs app role.
-- Housekeeping: ~50 analyzer warnings to clear before `TreatWarningsAsErrors`; commit `pnpm-lock.yaml` and switch CI
-  to `--frozen-lockfile`.
+- Phase 0 sprints 1–2 done. Sprint 2: `@fxos/ui` (Violeta tokens + Button, Badge, Field/SelectField, Switch,
+  Segmented, StatCard, AlertBanner, PageHeader, Breadcrumb, AppNav, UserMenu), app shell (`components/AppShell.tsx`),
+  ES/EN catalogs in `apps/web/messages/`, `/ui` component reference page, placeholder pages for the other sections.
+- UI conventions: build screens from `@fxos/ui`; add tokens/components there, not in app CSS. Every user-facing string
+  goes in both catalogs (typecheck fails if keys differ). Pass `linkAs={Link}` to link-rendering components.
+- Phase 1 (partial): tenant migration V0002 (rate_source, fx_rate hypertable, rate_load);
+  `fxworkers rates sync|backfill|load|schedule` (Banxico SF43718 → raw store in Blob/Azurite → every tenant,
+  idempotent, revisions audited; schedule = business days 12:30–18:00 Mexico City, started by dev.sh);
+  `/api/tenant/rates/*`. Banxico token: `workers/python/.env` only (`BANXICO_TOKEN`), never committed or logged.
+  Still to do: DOF connector, per-tenant source/recurrence settings, versioned manual value corrections, export
+  drawer (P2-06), source-down state (P2-S1).
+- Phase 2: V0004 forecasting (model registry, runs, points with 80/95% intervals, backtests);
+  V0005 interest-rate curves (TIIE + US Treasury, `fxworkers curves sync|backfill`) and model display order; models
+  `forward` (interest-rate parity), `ewma_vol`, `naive`; `fxworkers forecast run`; APIs for analytics and forecasts; Exchange Forecast follows R-01 (today hero card, trend, 30D volatility level, plum
+  forecast card + 12-month chart with 7D–180D horizon pills, biggest one-day move; the bottom-right card lists your rate
+  alerts — empty state introduces alerts with "Create alert" — and opens the header's P2-04 drawer; the rate-gap driver card was removed 2026-11-17) and
+  `/forecast/models` follows P4-04 (leaderboard vs naive per horizon). Build screens from the design canvas artboards
+  (R-*, P*-*, J*), not from scratch; "Alert me" opens the P2-04 drawer (Phase 4). `/forecast/history` follows R-02:
+  year/month/day views (URL-driven), gaps from a deterministic Mexican bank-holiday calendar (`MexicanBankCalendar`),
+  "Mark holiday" (V0006 `rate_gap_resolution`, audited), "Re-fetch"/"Sync now" record a `sync_request` that the
+  worker's scheduler processes every minute (fetch once, load every tenant), CSV export of the shown view.
+  Dashboard: greeting + today's rate card (reuses the Exchange Forecast data); O-05 adds the rest in Phase 3.
+  News (V0007 `rate_move`, `news_window`, `news_article`): `fxworkers news sync` flags moves beyond ±2σ of the previous
+  30 days, fetches GNews once per window into the raw store and copies into every tenant; `GET /api/tenant/news` reads
+  the tenant DB only. R-01 shows move markers, a Today button and the News card. `GNEWS_API_KEY` in
+  `workers/python/.env` only; free plan = last 30 days, 12 h delay, 100 req/day (set `GNEWS_PLAN=paid` to widen).
+  Still open from Phase 2: economic indicators/events and "why it moved", driver-based models, R-01 chart with
+  horizon filter and event markers.
+- Phase 3 (started, brief: `docs/phase-3-brief.md`): V0008 dropped the treasury scaffolding (bank_account,
+  financial_transaction, legal_entity, department; dashboard cash/exposure/projection; /treasury, /exposure,
+  /simulator). `fxworkers seed` now writes dummy users only.
+  Control V0002: `user_account` (lower-case email, Argon2id PHC hash, lock state, `is_platform_admin` for the tenant
+  admin portal), `tenant_membership` (admin/approver/standard, active/deactivated), `invitation` (tenant_setup or
+  teammate, one open per tenant+email), `account_token` (password_reset / email_change, one open per user+purpose),
+  `session`, `email_outbox` (pending → Firebase `mail`), append-only `control_audit_log`; tenant status `archived`
+  (+ `archived_at`). Token columns are 32-byte SHA-256 hashes.
+  Tenant V0009: `user_profile` rebuilt (`user_id` = control `user_account.id`; language, number format, email time
+  zone; no role — roles live only in `tenant_membership`), `notification_type` (9 U-03 items with defaults; weekly
+  summary off) + `notification_preference` (rows only when changed), company info as new `tenant_settings` columns
+  (legal name, country, conversion direction, reporting currency, `onboarding_completed_at`), `bank` (name + MXN/USD,
+  soft-removed, unique per currency ignoring case). Triggers: onboarding can't complete without one MXN and one USD
+  bank; afterwards the last bank of a currency can't be removed.
+  Passwords (`FxOs.Platform/Identity`): `IPasswordHasher` = Argon2id (Konscious) as PHC strings, OWASP parameters
+  m=19456 KiB, t=2, p=1, 16-byte salt; `Verify` returns `SucceededRehashNeeded` for older parameters (rehash on sign-in);
+  call `VerifyAgainstDummy` for unknown emails so timing doesn't reveal accounts. Input is NFC-normalised.
+  `PasswordPolicy.Check` returns rule codes `min_length` (12), `max_length` (128), `number`, `symbol`; lengths count
+  visible characters. The web forms must mirror these codes for the live checks.
+  `SecureToken` (32 random bytes, 43-char base64url raw; SHA-256 stored) and `IdentityStore` (control plane, uses
+  `TimeProvider`): invitations 7 days (resend revokes the open one; refused if the email is already an active member;
+  accept creates or links the account — an existing password is kept — and adds/reactivates the membership; refused for
+  non-active tenants), password reset 1 hour (clears the lock, ends all sessions), email change 24 hours (refused if the
+  address is taken), 5 failed sign-ins → 15-minute lock. Links are single use (row lock on claim). Every change writes
+  `control_audit_log` (`ControlAudit`) in the same transaction; raw tokens never reach the database or the audit log.
+  Email (`FxOs.Platform/Email`): `EmailOutbox.EnqueueAsync(conn, tx, EmailMessage)` in the caller's transaction; body
+  encrypted (Data Protection, control V0003 `body_protected`) and cleared once sent/failed. `EmailDispatcher` claims due
+  rows (SKIP LOCKED + 5-minute lease), sends through `IMailTransport` (`FirestoreMailTransport`: doc id = outbox id),
+  retries 1, 2, 4… minutes (max 60) up to 8 attempts. Only `Email:AllowedRecipients` are sent locally. Firebase settings
+  live in user secrets (README). Templates (EN/ES) and wiring the identity flows to the outbox are Sprint 2.
+  Verified end to end 2026-11-14 against Firebase project `fx-treasury` (Gmail SMTP 250 OK). No service-account keys
+  (org policy): local runs use ADC impersonating `fxos-mail-sender@fx-treasury-514701`; the org also disables
+  automatic IAM grants, so extension roles were granted by hand (README).
+  Sprint 2 (sign-in): `SessionStore` (7 days remembered / 12 h, token hash only) and `TenantResolutionMiddleware` take
+  the company from `Authorization: Bearer <session>`; the `X-Tenant` dev header works only on internal environments and
+  only for dummy tenants. `SignInService` + `/api/auth/sign-in|sign-out|session` (same answer for unknown email and wrong
+  password, lock after 5, rehash, lands in the company used last). `PasswordResetService` +
+  `/api/auth/password/forgot|reset` (always 202, 1-minute cooldown, emails in the same transaction). `PasswordPolicy`
+  adds `personal_info` (no email local part or name part of 3+ letters). `EmailTemplates`: all nine brief emails in
+  EN/ES (`EmailLayout`, HTML-encoded, http(s) buttons, times in an `EmailClock` zone; Mexico City until profiles store
+  one). Web: `fx_session` HTTP-only cookie set by server actions (`app/auth-actions.ts`), `middleware.ts` + `requireSession`
+  send signed-out visitors to `/sign-in?next=`; pages `/sign-in` (T-06/T-S2), `/forgot-password` (T-07/T-08),
+  `/reset-password` (T-10/T-S1), `/reset-password/done` (T-11) built from `AuthShell`, `PasswordField`, `PasswordRules`,
+  `Notice`, `StatusTile`, `Checkbox`; `lib/password.ts` mirrors the policy for live checks. The web dev tenant switcher
+  is gone; dummy-tenant logins come from Migrator `dev-user` (refuses real-data tenants). Test Postgres runs with
+  `max_connections=1000` (one pool per tenant). Note for later: one connection pool per tenant also grows with tenants
+  in production.
+  Sprint 3 (tenant admin portal): `/admin` in the same Next app (AdminShell, platform admins only, 404 otherwise) —
+  A-01 list/A-S1 empty, A-02 drawer, A-03/A-S2 setup steps (auto-refresh), A-04 manage, A-S3 type-to-confirm delete.
+  Control V0004 `tenant_job` (setup: database [API] → rate_history [Python worker, replays raw FIX objects + curves/news
+  best effort + first forecast] → invitation [API: setup invitation + email, tenant goes active] → done; load_dummy /
+  clear_dummy [worker]) and tenant status `deleted`. `TenantAdminService` + `/api/admin/*`; `TenantSetupRunner` hosted in
+  the API (`Platform:RunTenantSetup`, off in tests). Sessions may have no company (platform admin, portal only);
+  `CompanyAccess`: memberships + (platform admins) active dummy tenants, never real-data ones without a membership.
+  Company switching in the app shell (A-05/A-06) was removed 2026-11-16: people switch company by signing in (sign-in lands
+  in the company used last); platform admins open `/admin` by URL. The API (`/api/auth/companies`, `/api/auth/session/company`)
+  stays. Migrator `platform-admin`.
+  Default platform admin: the owner's work email (set locally; not stored in the repo). Prototype text "No sign-in until
+  Phase 6" is outdated; the portal uses the app's sign-in.
+  Sprints 4–6 (onboarding, team, settings): tenant V0010 `company_confirmed_at`. API: `InvitationFlow` (describe /
+  accept / renew expired links; welcome + member_joined emails), `TeamService` (invite standard/approver, resend, cancel,
+  role, deactivate/reactivate, send reset; last active admin protected), `AccountService` (password change, name, email
+  change with a 24 h confirm link); `/api/tenant/me|company|banks|onboarding/complete`, `/api/tenant/team/*` (all
+  `.CompanyAdminOnly()`), `/api/auth/invitation*|password/change|email/*`. Web: `/setup` (O-02/O-S1) →
+  `/setup/organization` (O-03) → `/setup/banks` (O-04/O-S2) → `/?welcome=1`; `/join` (T-05/T-S1), `/confirm-email`;
+  `/settings/profile|security|notifications|company|team` (U-01–U-03, C-01, T-01–T-03/T-S3) in `SettingsShell`.
+  AppShell sends an admin with unfinished onboarding to the next setup step (other roles never see it). Locale: switch
+  cookie → profile language → company default. Server actions in `app/settings/actions.ts`; `ActionForm` takes strings
+  only (no functions across the client boundary). Dashboard O-05: welcome/joined notice, first-plan card with bank chips
+  (button disabled until Phase 5), empty "Ongoing conversions", news from the tenant DB, "Invite your team" for admins.
+  Sprint 7 security review (2026-11-16): no exploitable findings; hardening done: email change needs the current
+  password and its confirmation ends every session and open reset links; a password change revokes open reset links;
+  an expired invitation renews once (control V0005 `invitation.renewed_from`) and only within 30 days of expiring;
+  `safeNext` rejects backslashes and control characters; the dev `X-Tenant` path isn't cached. Restore drill and
+  real-data load are part of the DevOps hand-off.
+  Brief gaps closed: tenant V0011 `audit_log.control_audit_id` + `ControlAuditMirror` (hosted, `Platform:MirrorControlAudit`,
+  every 10 s) copies `account.*`, `invitation.*`, `membership.*` from `control_audit_log` into each company's audit log,
+  once; `EmailClocks` picks email times: profile zone → company zone once confirmed → Mexico City (setup invitation
+  stays Mexico City); approval-request notifications are listed/settable for approvers and admins only.
+- Phase 4 (rate alerts and early warnings, build plan Phase 4): tenant V0012 `rate_alert` (owner `user_id`, above/below,
+  rate, early warning + look-ahead 7/15/30, keep-on, checker state `armed`/`warned`/`checked_fix_date`/`checked_run_id`,
+  soft delete) and `rate_alert_event` (unique per alert+kind+FIX date; `id` = the email's outbox id, `email_status`
+  pending/queued/skipped); notification type `rate_early_warning` (U-03 "Rate alerts" group with `rate_target_reached`).
+  `FxOs.Platform/Alerts`: `RateAlertMath` (chance of reaching a rate within N days from the stored run's central value
+  and 8-in-10 range, normal spread, max over days; trend rule 3 of last 5 moves for 7 days, 5 of 8 for 15, 7 of 12 for
+  30), `RateAlertRules.Check` (pure: reached → email, keep-on off switches off, keep-on re-arms after moving back; early
+  warning when trend holds and chance > 50%, once per trend), `RateAlertChecker` (hosted every minute,
+  `Platform:CheckRateAlerts`, off in tests; only alerts whose FIX date or run changed; event + state + audit in one tenant
+  transaction, then `EmailOutbox.EnqueueAsync(..., id)` idempotent; only the creator, only while an active member, and
+  only if their U-03 switch is on). Emails `rate_alert_reached` (P2-S2) and `rate_alert_early_warning` (P2-S3), EN/ES,
+  rates with 2 decimals in the profile number format, button → `/forecast?alert=<id>` (opens that alert to edit). API `/api/tenant/alerts`
+  (GET drawer data, POST, PUT = edit or turn back on, DELETE; your own alerts only, 404 otherwise; max 20).
+  Web: `RateAlertDrawer` — one form: "Alert me" or the card's "+" opens a new alert; a card row opens that alert to
+  edit (saving an off alert turns it back on; "Delete alert" replaces Cancel and asks in `ConfirmDialog`). No list view
+  in the drawer; the Exchange Forecast card lists every alert. The rate field's placeholder is today's FIX; live odds from `lib/alerts.ts` (mirrors
+  `RateAlertMath`; the API's value is the one that counts).
+- Forecast vs actual (R-02, before Phase 5): only forecasts the app published on their day (the daily `fxworkers
+  forecast run` after each Banxico sync) are compared; nothing is recreated for past days (tenant V0013 added
+  `forecast_run.origin` + index `forecast_point (horizon_days, target_date)`; V0014 deleted recreated runs and dropped
+  `origin`). API `GET /api/tenant/rates/{source}/history/forecast-check?from&to&horizons=7,15` (≤ 400 days): headline
+  model's forecast whose target falls in (previous FIX, this FIX], naive value (`last_rate`), signed error (FIX −
+  forecast), within 80%, summary MAE vs naive, bias. Web, kept simple: R-01's chart draws an orange line over the past =
+  the forecast published N days before each FIX, N = the selected horizon (hover: FIX, forecast with its date, miss);
+  Full history adds "Forecast 7D before" + "Miss" to the month view and a per-horizon table to the day view. The line
+  grows day by day as published forecasts reach their target dates. The scheduler (`fxworkers rates schedule`) also checks
+  every minute that each active tenant's latest FIX has a forecast (`needs_publish`), so a "Sync now" load, a missed
+  run or a failed tenant still gets that day's forecast; days the scheduler never ran stay empty (never back-filled).
+- Tenants (2026-11-16): a fresh install (and production) starts with no tenants and no dummy data; companies are
+  created in /admin. Locally only ArkusNexus remains (slug `demo_bajio`, converted to real data with Migrator
+  `mark-real`, dummy users cleared); Demo Norte was deleted with Migrator `delete-tenant` (system actor, same rules as
+  A-S3). `TenantAdminService.MarkRealDataAsync` is one way and refuses while profiles without a membership remain.
+- Forecast rule: publish every model's backtest next to the naive benchmark; do not present a model as better than
+  naive unless `mae_vs_naive` < 1 for that horizon.
+- Phase 0 sprint 3 (moved to the hosting work): Google Cloud internal environment, deploy workflow running per-tenant
+  migrations, OpenTelemetry (tenant id tag), Grafana. Split migration-owner vs app role is still ours, before real data.
+- Housekeeping: ~50 analyzer warnings to clear before `TreatWarningsAsErrors`.

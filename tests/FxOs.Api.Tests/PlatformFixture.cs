@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using FxOs.Api.Tenancy;
+using FxOs.Platform.Data;
 using FxOs.Platform.Tenancy;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -17,7 +18,11 @@ public sealed class PlatformFixture : IAsyncLifetime
 {
     public const string PostgresImage = "timescale/timescaledb:2.17.2-pg17";
 
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder().WithImage(PostgresImage).Build();
+    // Every test provisions its own tenants, each with its own connection pool, so the default 100 connections run out.
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
+        .WithImage(PostgresImage)
+        .WithCommand("-c", "max_connections=1000")
+        .Build();
 
     public FxApiFactory Factory { get; private set; } = null!;
 
@@ -59,6 +64,68 @@ public sealed class PlatformFixture : IAsyncLifetime
 
     public HttpClient Client() => Factory.CreateClient();
 
+    /// <summary>
+    /// A member of <paramref name="tenant"/> with an open session; returns the raw session token the web app would
+    /// forward. Optional password hash for sign-in tests.
+    /// </summary>
+    public async Task<(Guid UserId, string Email, string Token)> SignInAsync(
+        TenantRecord tenant, string role = "admin", string? passwordHash = null, bool remember = false)
+    {
+        var email = $"u_{Guid.NewGuid():N}@example.test";
+        await using var conn = await Services.GetRequiredService<ControlPlaneDb>().OpenAsync();
+        await using var tx = await conn.BeginTransactionAsync();
+        var userId = await Dapper.SqlMapper.ExecuteScalarAsync<Guid>(conn,
+            """
+            insert into user_account (email, display_name, password_hash, password_changed_at)
+            values (@email, 'Test member', @passwordHash, case when @passwordHash::text is null then null else now() end)
+            returning id
+            """,
+            new { email, passwordHash }, tx);
+        await Dapper.SqlMapper.ExecuteAsync(conn,
+            "insert into tenant_membership (tenant_id, user_id, role) values (@t, @u, @role)",
+            new { t = tenant.Id, u = userId, role }, tx);
+        var session = await Services.GetRequiredService<FxOs.Platform.Identity.SessionStore>()
+            .CreateAsync(conn, tx, userId, tenant.Id, remember, "tests", "127.0.0.1");
+        await tx.CommitAsync();
+        return (userId, email, session.RawToken);
+    }
+
+    /// <summary>The newest queued email of a template to an address, decrypted as the dispatcher would (or null).</summary>
+    public async Task<string?> EmailBodyAsync(string to, string template)
+    {
+        await using var conn = await Services.GetRequiredService<ControlPlaneDb>().OpenAsync();
+        var body = await Dapper.SqlMapper.ExecuteScalarAsync<string?>(conn,
+            "select body_protected from email_outbox where to_email = @to and template = @template order by created_at desc limit 1",
+            new { to = to.ToLowerInvariant(), template });
+        return body is null
+            ? null
+            : Microsoft.AspNetCore.DataProtection.DataProtectionCommonExtensions.Unprotect(
+                Services.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>()
+                    .CreateProtector(FxOs.Platform.Email.EmailOutbox.ProtectorPurpose), body);
+    }
+
+    /// <summary>The 43-character token from a link like ".../join?token=…" in an email body.</summary>
+    public static string LinkToken(string body, string path) =>
+        System.Text.RegularExpressions.Regex.Match(body, path + @"\?token=([A-Za-z0-9_-]{43})").Groups[1].Value;
+
+    public static HttpRequestMessage Authed(HttpMethod method, string url, string token, object? json = null)
+    {
+        var request = Request(method, url, tenant: null, json);
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        return request;
+    }
+
+    /// <summary>Opens the tenant's own database with its own login, as the API does.</summary>
+    public async Task<NpgsqlConnection> OpenTenantAsync(TenantRecord tenant)
+    {
+        var password = await Services.GetRequiredService<FxOs.Platform.Secrets.ISecretStore>().GetAsync(tenant.SecretRef!);
+        var cs = Services.GetRequiredService<TenantServerRegistry>()
+            .TenantConnectionString(tenant.ServerKey!, tenant.DatabaseName!, tenant.LoginRole!, password!);
+        var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+        return conn;
+    }
+
     public static HttpRequestMessage Request(HttpMethod method, string url, string? tenant, object? json = null)
     {
         var request = new HttpRequestMessage(method, url);
@@ -85,6 +152,10 @@ public sealed class FxApiFactory(string controlPlane, string server) : WebApplic
         builder.UseSetting("TenantServers:default", server);
         builder.UseSetting("Platform:DevTenantSwitcher:Enabled", "true");
         builder.UseSetting("Platform:MigrateControlPlaneOnStartup", "true");
+        // Tests drive tenant setup step by step (TenantSetupRunner.RunOnceAsync).
+        builder.UseSetting("Platform:RunTenantSetup", "false");
+        builder.UseSetting("Platform:MirrorControlAudit", "false");
+        builder.UseSetting("Platform:CheckRateAlerts", "false");
     }
 }
 

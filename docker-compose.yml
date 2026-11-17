@@ -1,4 +1,4 @@
-# Local development stack for Phase 0.
+# Local development stack.
 # One PostgreSQL server hosts the control-plane database (fx_control) and one database per tenant.
 # The TimescaleDB image is used from day one so Phase 1 hypertables need no infrastructure change.
 services:
@@ -19,6 +19,16 @@ services:
       timeout: 3s
       retries: 20
 
+  # Local Azure Blob emulator: the immutable raw store for fetched rate responses (Phase 1).
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:3.33.0
+    restart: unless-stopped
+    command: azurite-blob --blobHost 0.0.0.0 --location /data --skipApiVersionCheck --loose
+    ports:
+      - "10000:10000"
+    volumes:
+      - azurite:/data
+
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -27,3 +37,4 @@ services:
 
 volumes:
   pgdata:
+  azurite:

@@ -1,4 +1,5 @@
 using FxOs.Platform;
+using FxOs.Platform.Identity;
 using FxOs.Platform.Tenancy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -8,6 +9,12 @@ using Microsoft.Extensions.Hosting;
 //   dotnet run --project src/FxOs.Migrator -- tenants                   migrate every tenant database
 //   dotnet run --project src/FxOs.Migrator -- provision <slug> "<name>" create or repair a dummy tenant
 //   dotnet run --project src/FxOs.Migrator -- list                      list tenants and schema versions
+//   dotnet run --project src/FxOs.Migrator -- dev-user <slug> <email> "<name>" [admin|approver|standard]
+//                                              [--platform-admin] [--set-by-reset]
+//                                                                       sign-in for a dummy tenant; asks for the password,
+//                                                                       or with --set-by-reset you set it via "Forgot password?"
+//   dotnet run --project src/FxOs.Migrator -- platform-admin <email> "<name>"
+//                                                                       tenant admin portal access (no company needed)
 
 var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
 {
@@ -66,7 +73,119 @@ switch (command)
         return 0;
     }
 
+    case "dev-user":
+    {
+        var positional = args.Where(a => !a.StartsWith('-')).ToArray();
+        if (positional.Length < 4)
+        {
+            Console.Error.WriteLine("Usage: dev-user <slug> <email> \"<name>\" [admin|approver|standard] [--platform-admin] [--set-by-reset]");
+            return 2;
+        }
+
+        // Typed (hidden) or piped; never an argument, so it stays out of shell history.
+        var setByReset = args.Contains("--set-by-reset");
+        var password = setByReset ? null : ReadPassword("Password (12+ characters, a number and a symbol): ");
+        var result = await services.GetRequiredService<DevAccountService>().SetAsync(
+            positional[1], positional[2], positional[3], positional.Length > 4 ? positional[4] : MembershipRole.Admin, password,
+            platformAdmin: args.Contains("--platform-admin"), cts.Token);
+        (result.Ok ? Console.Out : Console.Error).WriteLine(result.Message);
+        return result.Ok ? 0 : 1;
+    }
+
+    case "delete-tenant":
+    {
+        // Same rules as the portal (A-S3): dummy tenants only, and the display name typed exactly to confirm.
+        var positional = args.Where(a => !a.StartsWith('-')).ToArray();
+        if (positional.Length < 3)
+        {
+            Console.Error.WriteLine("Usage: delete-tenant <slug> \"<display name>\"");
+            return 2;
+        }
+
+        var tenant = await services.GetRequiredService<ControlPlaneStore>().FindBySlugAsync(positional[1], cts.Token);
+        if (tenant is null)
+        {
+            Console.Error.WriteLine($"No tenant '{positional[1]}'.");
+            return 1;
+        }
+
+        var result = await services.GetRequiredService<TenantAdminService>()
+            .DeleteAsync(tenant.Id, positional[2], ControlActor.System, cts.Token);
+        (result.Ok ? Console.Out : Console.Error).WriteLine(result.Ok ? $"Tenant {tenant.Slug} deleted." : $"{result.Code}: {result.Message}");
+        return result.Ok ? 0 : 1;
+    }
+
+    case "mark-real":
+    {
+        var positional = args.Where(a => !a.StartsWith('-')).ToArray();
+        if (positional.Length < 2)
+        {
+            Console.Error.WriteLine("Usage: mark-real <slug>   (one way: the tenant then holds real data)");
+            return 2;
+        }
+
+        var tenant = await services.GetRequiredService<ControlPlaneStore>().FindBySlugAsync(positional[1], cts.Token);
+        if (tenant is null)
+        {
+            Console.Error.WriteLine($"No tenant '{positional[1]}'.");
+            return 1;
+        }
+
+        var result = await services.GetRequiredService<TenantAdminService>().MarkRealDataAsync(tenant.Id, ControlActor.System, cts.Token);
+        (result.Ok ? Console.Out : Console.Error).WriteLine(result.Ok ? $"Tenant {tenant.Slug} now holds real data." : $"{result.Code}: {result.Message}");
+        return result.Ok ? 0 : 1;
+    }
+
+    case "platform-admin":
+    {
+        var positional = args.Where(a => !a.StartsWith('-')).ToArray();
+        if (positional.Length < 3)
+        {
+            Console.Error.WriteLine("Usage: platform-admin <email> \"<name>\"");
+            return 2;
+        }
+
+        await services.GetRequiredService<TenantMigrationService>().MigrateControlPlaneAsync(cts.Token);
+        var result = await services.GetRequiredService<DevAccountService>().SetPlatformAdminAsync(positional[1], positional[2], cts.Token);
+        (result.Ok ? Console.Out : Console.Error).WriteLine(result.Message);
+        return result.Ok ? 0 : 1;
+    }
+
     default:
-        Console.Error.WriteLine("Commands: control | tenants | provision <slug> \"<name>\" | list");
+        Console.Error.WriteLine("Commands: control | tenants | provision <slug> \"<name>\" | list | dev-user <slug> <email> \"<name>\" [role] | platform-admin <email> \"<name>\"");
         return 2;
+}
+
+static string ReadPassword(string prompt)
+{
+    if (Console.IsInputRedirected)
+    {
+        return Console.ReadLine() ?? "";
+    }
+
+    Console.Write(prompt);
+    var chars = new System.Text.StringBuilder();
+    while (true)
+    {
+        var key = Console.ReadKey(intercept: true);
+        if (key.Key == ConsoleKey.Enter)
+        {
+            break;
+        }
+
+        if (key.Key == ConsoleKey.Backspace)
+        {
+            if (chars.Length > 0)
+            {
+                chars.Length--;
+            }
+        }
+        else if (!char.IsControl(key.KeyChar))
+        {
+            chars.Append(key.KeyChar);
+        }
+    }
+
+    Console.WriteLine();
+    return chars.ToString();
 }
