@@ -1,6 +1,7 @@
 # CLAUDE.md — FX Intelligence & Treasury OS
 
-Read this first. It holds the decisions and conventions agreed so far; the README has run commands.
+Read this first. It holds the decisions and conventions agreed so far; the README has the summary, local run and
+Railway deploy steps; `docs/operations.md` has how each part works and every command.
 
 ## Product
 USD/MXN exchange-rate platform. Built first for Arkus Nexus, later multi-tenant SaaS.
@@ -24,6 +25,11 @@ MFA/two-step verification.
   Cloud Storage for the raw store (`FX_RAW_STORE_URL=gs://…`), Secret Manager (`Secrets:Provider=google`,
   `Secrets:Google:ProjectId`; any non-internal environment requires it and refuses the dev switcher). Development
   still runs locally (through Phase 4); don't provision cloud resources (projects, networks, buckets, deploy workflows).
+- Railway (README, 2026-11-17): Postgres + api (`deploy/api.Dockerfile`, default stage, Migrator bundled at
+  `/app/migrator` for the pre-deploy `tenants` step) + workers (`deploy/workers.Dockerfile`, default `rates schedule`,
+  raw store on a volume via `FX_RAW_STORE_DIR`) + web (`next start` on `$PORT`). Runs as `ASPNETCORE_ENVIRONMENT=Internal`
+  because the Python worker reads tenant passwords only from the control-plane dev secret store; Firebase email there
+  needs a service-account key (blocked by the org today).
 - Cloud SQL has no TimescaleDB: the migration runner skips `create extension … timescaledb` and `create_hypertable(…)`
   on a server without it (`CloudSqlCompatibilityTests` runs every migration on plain PostgreSQL 17). New migrations must
   be plain PostgreSQL; no Timescale functions in queries. Locally the Timescale image still works.

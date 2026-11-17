@@ -12,4 +12,5 @@ RUN pip install --no-cache-dir ".[gcp]" \
  && useradd --create-home worker
 USER worker
 ENTRYPOINT ["fxworkers"]
-CMD ["--help"]
+# Default: the rate scheduler (Banxico sync, curves, forecasts, news, "Sync now" requests, tenant setup jobs).
+CMD ["rates", "schedule"]
