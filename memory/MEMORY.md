@@ -1,2 +1,2 @@
 - [Dev stack ports belong to user](dev-stack-ports-belong-to-user.md) — 3000/5080 are usually ./scripts/dev.sh; never kill them
-- [Local only until DevOps hand-off](local-only-until-devops-handoff.md) — no Azure infra work; Firebase email must work locally
+- [Hosting plan](hosting-plan.md) — local dev now; Firebase/Google Cloud target, Railway documented; no cloud provisioning
