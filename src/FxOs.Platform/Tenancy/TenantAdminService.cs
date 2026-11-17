@@ -176,8 +176,13 @@ public sealed class TenantAdminService(
     /// database, its login and its secret are dropped, and the row stays as 'deleted' for the audit trail. Real-data
     /// tenants can only be archived. The caller must type the tenant's name.
     /// </summary>
-    public async Task<AdminResult> DeleteAsync(Guid tenantId, string typedName, Guid actorUserId, CancellationToken ct = default)
+    public Task<AdminResult> DeleteAsync(Guid tenantId, string typedName, Guid actorUserId, CancellationToken ct = default) =>
+        DeleteAsync(tenantId, typedName, ControlActor.PlatformAdmin(actorUserId), ct);
+
+    /// <summary>Delete a dummy tenant (A-S3); <paramref name="actor"/> is a platform admin, or System from the Migrator.</summary>
+    public async Task<AdminResult> DeleteAsync(Guid tenantId, string typedName, ControlActor actor, CancellationToken ct = default)
     {
+        var actorUserId = actor.UserId;
         var tenant = await store.FindByIdAsync(tenantId, ct);
         if (tenant is null || tenant.Status == TenantStatus.Deleted)
         {
@@ -209,7 +214,7 @@ public sealed class TenantAdminService(
                 update tenant set status = 'deleted', deleted_at = now(), archived_at = null, updated_at = now() where id = @tenantId;
                 """,
                 new { tenantId, actorUserId }, tx, ct);
-            await ControlAudit.WriteAsync(conn, tx, ControlActor.PlatformAdmin(actorUserId), "tenant.deleted", tenantId,
+            await ControlAudit.WriteAsync(conn, tx, actor, "tenant.deleted", tenantId,
                 "tenant", tenantId.ToString(), new { tenant.Slug, tenant.DisplayName }, ct);
             await tx.CommitAsync(ct);
         }
@@ -229,6 +234,57 @@ public sealed class TenantAdminService(
         }
 
         log.LogInformation("Tenant {Slug} deleted", tenant.Slug);
+        return new AdminResult(true, TenantId: tenantId);
+    }
+
+    /// <summary>
+    /// A dummy tenant becomes a real company (e.g. the first one kept after testing). One way: afterwards it can only be
+    /// archived, dummy data can no longer be loaded, the dev header and dev-user refuse it, and platform admins need a
+    /// membership to open it. Clear its dummy data first; this refuses while seeded dummy users are still there.
+    /// </summary>
+    public async Task<AdminResult> MarkRealDataAsync(Guid tenantId, ControlActor actor, CancellationToken ct = default)
+    {
+        var tenant = await store.FindByIdAsync(tenantId, ct);
+        if (tenant is null || tenant.Status == TenantStatus.Deleted)
+        {
+            return new AdminResult(false, "not_found");
+        }
+
+        if (!tenant.IsDummy)
+        {
+            return new AdminResult(false, "already_real", "This tenant already holds real data.");
+        }
+
+        if (!tenant.IsActive)
+        {
+            return new AdminResult(false, "not_active", "Only an active tenant can be marked as real.");
+        }
+
+        await using (var tconn = await (await tenantDbs.GetAsync(tenant, ct)).OpenConnectionAsync(ct))
+        {
+            // Seeded dummy users have no membership in the control plane; real people always do.
+            var userIds = (await tconn.QueryAsync<Guid>(new CommandDefinition("select user_id from user_profile", cancellationToken: ct))).ToArray();
+            await using var cp = await controlPlane.OpenAsync(ct);
+            var members = await cp.ExecuteScalarAsync<int>(new CommandDefinition(
+                "select count(*) from tenant_membership where tenant_id = @tenantId and user_id = any(@userIds)",
+                new { tenantId, userIds }, cancellationToken: ct));
+            if (members < userIds.Length)
+            {
+                return new AdminResult(false, "dummy_data", $"Clear the dummy data first: {userIds.Length - members} profile(s) belong to no member.");
+            }
+        }
+
+        await using (var conn = await controlPlane.OpenAsync(ct))
+        await using (var tx = await conn.BeginTransactionAsync(ct))
+        {
+            await conn.ExecAsync("update tenant set is_dummy = false, updated_at = now() where id = @tenantId and is_dummy",
+                new { tenantId }, tx, ct);
+            await ControlAudit.WriteAsync(conn, tx, actor, "tenant.marked_real", tenantId, "tenant", tenantId.ToString(),
+                new { tenant.Slug, tenant.DisplayName }, ct);
+            await tx.CommitAsync(ct);
+        }
+
+        log.LogInformation("Tenant {Slug} marked as holding real data", tenant.Slug);
         return new AdminResult(true, TenantId: tenantId);
     }
 

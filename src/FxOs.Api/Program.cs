@@ -53,6 +53,7 @@ app.MapRateEndpoints();
 app.MapForecastEndpoints();
 app.MapAlertEndpoints();
 app.MapRateHistoryEndpoints();
+app.MapForecastCheckEndpoints();
 app.MapNewsEndpoints();
 
 await app.RunAsync();

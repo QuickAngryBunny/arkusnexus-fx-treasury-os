@@ -2,8 +2,8 @@ import Link from "next/link";
 import { AlertBanner, Button, HeroCard, PageHeader, StatCard } from "@fxos/ui";
 import { AppShell } from "@/components/AppShell";
 import { ForecastCard, HorizonProvider, NewsCard, RateChart, type ChartData, type HorizonData, type NewsEvent } from "@/components/forecast/HorizonView";
-import { RateAlertDrawer, type AlertDrawerLabels } from "@/components/forecast/RateAlertDrawer";
-import { apiGet, type Forecasts, type LatestRate, type NewsFeed, type RateAlerts, type RateAnalytics, type RateHistory, type RateSource } from "@/lib/api";
+import { RateAlertDrawer, RateAlertsCard, type AlertDrawerLabels } from "@/components/forecast/RateAlertDrawer";
+import { apiGet, type ForecastCheck, type Forecasts, type LatestRate, type NewsFeed, type RateAlerts, type RateAnalytics, type RateHistory, type RateSource } from "@/lib/api";
 import { CURRENCY_DIGITS, formatDateTime, formatRate, formatSigned, type Locale, type MessageKey, type Translate } from "@/lib/i18n";
 import { getSession } from "@/lib/session";
 
@@ -13,11 +13,12 @@ const SOURCE = "banxico_fix";
 const DAY_MS = 86_400_000;
 const toDay = (iso: string) => Math.round(Date.parse(`${iso}T00:00:00Z`) / DAY_MS);
 
-/** Exchange Forecast (R-01): today, trend, volatility and forecast up front; 12 months → forecast chart; drivers. */
-export default async function ForecastPage({ searchParams }: { searchParams: Promise<{ alerts?: string }> }) {
+/** Exchange Forecast (R-01): today, trend, volatility and forecast up front; 12 months → forecast chart; news and your rate alerts. */
+export default async function ForecastPage({ searchParams }: { searchParams: Promise<{ alert?: string }> }) {
   const { tenant, profile, locale, numbers, t, viewer } = await getSession();
-  // Alert emails link here with ?alerts=open (the drawer opens on the person's alerts).
-  const openAlerts = (await searchParams).alerts === "open";
+  // Alert emails link here with ?alert=<id>: the drawer opens on that alert.
+  const alertParam = Number((await searchParams).alert);
+  const openAlertId = Number.isInteger(alertParam) && alertParam > 0 ? alertParam : undefined;
   let alertsNode: React.ReactNode = <AlertMeButton t={t} />;
   const fmtDate = (iso: string, opts: Intl.DateTimeFormatOptions) =>
     new Intl.DateTimeFormat(locale, { ...opts, timeZone: "UTC" }).format(new Date(`${iso}T00:00:00Z`));
@@ -45,7 +46,7 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
   if (alerts.ok && alerts.data.today) {
     alertsNode = (
       <RateAlertDrawer data={alerts.data} labels={alertLabels(t)} numbers={numbers} locale={locale}
-        email={viewer?.email ?? ""} icon={<BellIcon />} initialOpen={openAlerts} />
+        email={viewer?.email ?? ""} icon={<BellIcon />} initialAlertId={openAlertId} />
     );
   }
   if (!latest.ok) {
@@ -58,9 +59,13 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
 
   const r = latest.data;
   const from = new Date(Date.parse(`${r.date}T00:00:00Z`) - 365 * DAY_MS).toISOString().slice(0, 10);
-  const [history, news] = await Promise.all([
+  // Past forecasts for the chart's orange line: for each FIX in the longest window (180 days), the forecast made
+  // 7…180 days before it. The line shown matches the selected horizon.
+  const pastFrom = new Date(Date.parse(`${r.date}T00:00:00Z`) - 185 * DAY_MS).toISOString().slice(0, 10);
+  const [history, news, past] = await Promise.all([
     apiGet<RateHistory>(`/api/tenant/rates/${SOURCE}?from=${from}&to=${r.date}`),
     apiGet<NewsFeed>(`/api/tenant/news?from=${from}`),
+    apiGet<ForecastCheck>(`/api/tenant/rates/${SOURCE}/history/forecast-check?from=${pastFrom}&to=${r.date}&horizons=7,15,30,60,90,180`),
   ]);
   const source = sources.ok ? sources.data.find((s) => s.code === SOURCE) : undefined;
   const a = analytics.ok ? analytics.data : null;
@@ -225,6 +230,9 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
       horizonDays: p.horizonDays, day: toDay(p.targetDate), point: p.point,
       lower80: p.lower80, upper80: p.upper80, lower95: p.lower95, upper95: p.upper95,
     })),
+    past: (past.ok ? past.data.days : []).flatMap((d) => d.forecasts.map((f) => ({
+      horizonDays: f.horizon, day: toDay(d.date), point: f.point, madeOn: toDay(f.asOf),
+    }))),
     moves: (feed?.moves ?? []).map((m) => ({
       key: `move:${m.date}`, day: toDay(m.date), rate: m.rate,
       aria: t("news.markerAria", { date: dayMonthYear(m.date), pct: formatSigned(numbers, m.changePct, 2, "%") }),
@@ -243,39 +251,28 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
       low: t("fx.legend.low"),
       bigMove: t("news.legend"),
       modelPoints: t("fx.legend.modelPoints"),
+      pastForecast: t("fx.legend.pastForecast"),
+      madeOn: t("fx.legend.madeOn"),
+      miss: t("fx.legend.miss"),
       pickHint: t("news.pickHint"),
       todayButton: t("news.todayButton", { date: fmtDate(r.date, { day: "numeric", month: "short" }) }),
     },
   };
 
   const failedLoad = source?.lastLoad?.status === "failed" ? source.lastLoad : null;
-  const gap = a?.rateGap;
-  const corr = gap?.correlation90d ?? null;
-  const corrText = corr === null
-    ? "—"
-    : t(Math.abs(corr) < 0.2 ? "fx.driverWeak" : corr > 0 ? "fx.driverWith" : "fx.driverOpposite", { r: formatSigned(numbers, corr, 2) });
-  const corrClass = corr === null || Math.abs(corr) < 0.2 ? "muted" : corr > 0 ? "fx-with" : "fx-opposite";
 
-  const driversCard = (
-        <article className="card fx-drivers">
-          <span className="fx-kicker">{t("fx.driversKicker")}</span>
-          {gap ? (
-            <>
-              <div className="fx-driver">
-                <span>{t("fx.driverGap", { gap: formatRate(numbers, gap.gapPts) })}</span>
-                <strong className={corrClass}>{corrText}</strong>
-              </div>
-              <div className="fx-driver muted"><span>{t("fx.driverDxy")}</span><span>{t("fx.driverSoon")}</span></div>
-              <div className="fx-driver muted"><span>{t("fx.driverInflation")}</span><span>{t("fx.driverSoon")}</span></div>
-              <p className="fx-drivers__note">
-                {t("fx.driversNote", { mxn: formatRate(numbers, gap.mxnRatePct), usd: formatRate(numbers, gap.usdRatePct) })}
-              </p>
-            </>
-          ) : (
-            <p className="fx-drivers__note">{t("fx.driversNone")}</p>
-          )}
-        </article>
-  );
+  // Bottom-right: the person's rate alerts (or an introduction with "Create alert"); opens the header's drawer.
+  const alertsCard = alerts.ok && alerts.data.today ? (
+    <RateAlertsCard data={alerts.data} labels={alertLabels(t)} numbers={numbers} locale={locale}
+      card={{
+        kicker: t("alertsCard.kicker"),
+        emptyTitle: t("alertsCard.emptyTitle"),
+        emptyBody: t("alertsCard.emptyBody"),
+        create: t("alertsCard.create"),
+        add: t("alertsCard.add"),
+        maxReached: t("alert.maxReached"),
+      }} />
+  ) : null;
 
   const todayRow = (withForecast: boolean) => (
     <section aria-label={t("fx.todayLabel")} className="fx-today">
@@ -298,14 +295,14 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
           <RateChart data={chart} />
           <section className="fx-bottom">
             <NewsCard events={events} />
-            {driversCard}
+            {alertsCard}
           </section>
         </HorizonProvider>
       ) : (
         <>
           {todayRow(false)}
           <p className="subtitle">{t("fx.noForecast")}</p>
-          <section className="fx-bottom">{driversCard}</section>
+          {alertsCard && <section className="fx-bottom">{alertsCard}</section>}
         </>
       )}
 
@@ -378,28 +375,24 @@ function alertLabels(t: Translate): AlertDrawerLabels {
     kicker: t("fx.alertsKicker"),
     titleNew: t("alert.titleNew"),
     titleEdit: t("alert.titleEdit"),
-    titleList: t("alert.titleList"),
     close: t("alert.close"),
-    done: t("alert.done"),
-    listIntro: t("alert.listIntro"),
     above: t("alert.above"),
     below: t("alert.below"),
     chance30: t("alert.chance30"),
     earlyOn: t("alert.earlyOn"),
     earlyOff: t("alert.earlyOff"),
-    keepOnShort: t("alert.keepOnShort"),
-    keepOffShort: t("alert.keepOffShort"),
     statusOn: t("alert.statusOn"),
     statusOff: t("alert.statusOff"),
     statusReached: t("alert.statusReached"),
-    edit: t("alert.edit"),
-    turnOn: t("alert.turnOn"),
-    remove: t("alert.remove"),
-    confirmRemove: t("alert.confirmRemove"),
+    deleteAlert: t("alert.deleteAlert"),
+    confirmTitle: t("alert.confirmTitle"),
+    confirmBody: t("alert.confirmBody"),
     confirmYes: t("alert.confirmYes"),
     confirmNo: t("alert.confirmNo"),
-    addAnother: t("alert.addAnother"),
-    maxReached: t("alert.maxReached"),
+    offNotice: t("alert.offNotice"),
+    offReached: t("alert.offReached"),
+    offBody: t("alert.offBody"),
+    saveTurnOn: t("alert.saveTurnOn"),
     today: t("alert.today"),
     forecast30: t("alert.forecast30"),
     chartAria: t("alert.chartAria"),
@@ -431,7 +424,6 @@ function alertLabels(t: Translate): AlertDrawerLabels {
     earlyEmailsOff: t("alert.earlyEmailsOff"),
     settingsLink: t("alert.settingsLink"),
     cancel: t("alert.cancel"),
-    back: t("alert.back"),
     create: t("alert.create"),
     save: t("alert.save"),
     saving: t("alert.saving"),

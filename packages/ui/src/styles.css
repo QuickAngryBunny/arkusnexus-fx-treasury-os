@@ -431,6 +431,18 @@ a.vi-stat:hover { background: var(--vi-selected); }
 .vi-drawer__foot > *:last-child { flex: 2; }
 @media (max-width: 520px) { .vi-drawer__panel { border-radius: var(--vi-radius-banner) var(--vi-radius-banner) 0 0; top: auto; max-height: 92vh; width: 100%; } }
 
+/* ── Confirm dialog ─────────────────────────────────────── */
+.vi-confirm { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 16px; font-family: var(--vi-font); }
+.vi-confirm__scrim { position: absolute; inset: 0; border: 0; padding: 0; background: var(--vi-scrim); cursor: pointer; }
+.vi-confirm__panel {
+  position: relative; width: 100%; max-width: 400px; box-sizing: border-box; padding: 24px; border-radius: var(--vi-radius-card);
+  background: var(--vi-white); color: var(--vi-ink); box-shadow: 0 30px 60px -30px rgb(62 31 85 / 45%);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.vi-confirm__panel h2 { margin: 0; font-size: 20px; font-weight: 800; color: var(--vi-plum); }
+.vi-confirm__body { font-size: 14px; line-height: 1.5; color: var(--vi-ink-2); }
+.vi-confirm__actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+
 /* ── Rate alert drawer (P2-04) ──────────────────────────── */
 .vi-alert-preview { padding: 14px; border-radius: 20px; background: var(--vi-canvas); display: flex; flex-direction: column; gap: 6px; }
 .vi-alert-preview__head { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--vi-ink-2); }
@@ -446,15 +458,7 @@ a.vi-stat:hover { background: var(--vi-selected); }
 .vi-alert-option--on { border-color: var(--vi-lilac); }
 .vi-alert-option > .vi-switch { border: 0; background: transparent; padding: 0; min-height: 0; }
 .vi-alert-option__more { display: flex; flex-direction: column; gap: 6px; }
-.vi-alerts__intro { margin: 0; font-size: 14px; line-height: 1.5; color: var(--vi-ink-2); }
-.vi-alerts { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
-.vi-alerts__item { padding: 14px; border-radius: 20px; border: 1.5px solid var(--vi-line); display: flex; flex-direction: column; gap: 8px; }
-.vi-alerts__item--off { background: var(--vi-canvas); border-color: transparent; }
-.vi-alerts__top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
-.vi-alerts__top strong { font-size: 16px; color: var(--vi-ink); }
-.vi-alerts__meta { font-size: 13px; line-height: 1.45; color: var(--vi-muted); }
-.vi-alerts__actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.vi-alerts__confirm { font-size: 13px; font-weight: 700; color: var(--vi-danger); margin-right: auto; }
+.vi-alert-delete { color: var(--vi-danger); border-color: var(--vi-orange-line); }
 
 /* ── Step list (A-03, A-S2) ─────────────────────────────── */
 .vi-steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; font-family: var(--vi-font); }

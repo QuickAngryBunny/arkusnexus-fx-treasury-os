@@ -92,6 +92,50 @@ switch (command)
         return result.Ok ? 0 : 1;
     }
 
+    case "delete-tenant":
+    {
+        // Same rules as the portal (A-S3): dummy tenants only, and the display name typed exactly to confirm.
+        var positional = args.Where(a => !a.StartsWith('-')).ToArray();
+        if (positional.Length < 3)
+        {
+            Console.Error.WriteLine("Usage: delete-tenant <slug> \"<display name>\"");
+            return 2;
+        }
+
+        var tenant = await services.GetRequiredService<ControlPlaneStore>().FindBySlugAsync(positional[1], cts.Token);
+        if (tenant is null)
+        {
+            Console.Error.WriteLine($"No tenant '{positional[1]}'.");
+            return 1;
+        }
+
+        var result = await services.GetRequiredService<TenantAdminService>()
+            .DeleteAsync(tenant.Id, positional[2], ControlActor.System, cts.Token);
+        (result.Ok ? Console.Out : Console.Error).WriteLine(result.Ok ? $"Tenant {tenant.Slug} deleted." : $"{result.Code}: {result.Message}");
+        return result.Ok ? 0 : 1;
+    }
+
+    case "mark-real":
+    {
+        var positional = args.Where(a => !a.StartsWith('-')).ToArray();
+        if (positional.Length < 2)
+        {
+            Console.Error.WriteLine("Usage: mark-real <slug>   (one way: the tenant then holds real data)");
+            return 2;
+        }
+
+        var tenant = await services.GetRequiredService<ControlPlaneStore>().FindBySlugAsync(positional[1], cts.Token);
+        if (tenant is null)
+        {
+            Console.Error.WriteLine($"No tenant '{positional[1]}'.");
+            return 1;
+        }
+
+        var result = await services.GetRequiredService<TenantAdminService>().MarkRealDataAsync(tenant.Id, ControlActor.System, cts.Token);
+        (result.Ok ? Console.Out : Console.Error).WriteLine(result.Ok ? $"Tenant {tenant.Slug} now holds real data." : $"{result.Code}: {result.Message}");
+        return result.Ok ? 0 : 1;
+    }
+
     case "platform-admin":
     {
         var positional = args.Where(a => !a.StartsWith('-')).ToArray();

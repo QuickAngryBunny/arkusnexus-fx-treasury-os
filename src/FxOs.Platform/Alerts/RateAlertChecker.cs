@@ -154,7 +154,7 @@ public sealed class RateAlertChecker(
     {
         var pending = (await conn.QueryAsync<PendingRow>(new CommandDefinition(
             """
-            select e.id, e.kind, e.fix_date, e.fix_rate, e.chance, e.detail::text as detail,
+            select e.id, e.alert_id, e.kind, e.fix_date, e.fix_rate, e.chance, e.detail::text as detail,
                    a.user_id, a.direction, a.rate, a.keep_on, a.look_ahead_days,
                    coalesce(p.language, (select locale from tenant_settings where id = 1)) as language, p.number_format,
                    coalesce(np.email_enabled, t.default_enabled, true) as email_enabled
@@ -186,11 +186,11 @@ public sealed class RateAlertChecker(
             var message = e.Kind == AlertEventKind.Reached
                 ? EmailTemplates.RateAlertReached(locale, person.Value.Email, new RateAlertReachedModel(
                     tenant.Id, person.Value.Name, e.Direction, e.Rate, fixDate, e.FixRate, e.KeepOn, forecast,
-                    e.NumberFormat ?? "period_decimal", links.RateAlerts))
+                    e.NumberFormat ?? "period_decimal", links.RateAlert(e.AlertId)))
                 : EmailTemplates.RateAlertEarlyWarning(locale, person.Value.Email, new RateAlertEarlyWarningModel(
                     tenant.Id, person.Value.Name, e.Direction, e.Rate, fixDate, e.FixRate, e.KeepOn, detail.LookAheadDays ?? e.LookAheadDays,
                     detail.TrendMoves ?? 0, detail.TrendWindow ?? 0, (double)(e.Chance ?? 0), forecast,
-                    e.NumberFormat ?? "period_decimal", links.RateAlerts));
+                    e.NumberFormat ?? "period_decimal", links.RateAlert(e.AlertId)));
 
             await using (var cp = await controlPlane.OpenAsync(ct))
             {
@@ -240,6 +240,7 @@ public sealed class RateAlertChecker(
     private sealed class PendingRow
     {
         public Guid Id { get; set; }
+        public long AlertId { get; set; }
         public string Kind { get; set; } = "";
         public DateTime FixDate { get; set; }
         public decimal FixRate { get; set; }

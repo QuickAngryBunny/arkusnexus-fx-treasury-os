@@ -80,6 +80,7 @@ public sealed class RateAlertTests(PlatformFixture fx)
         var body = await fx.EmailBodyAsync(email, "rate_alert_reached");
         Assert.Contains("USD/MXN 19.03", body);  // the first FIX past the level
         Assert.Contains("This alert is now off", body);
+        Assert.Contains("forecast?alert=", body);  // opens that alert to turn it back on
 
         await AddFixesAsync(tenant, 18.80m, 19.20m);
         await CheckAsync(tenant);

@@ -37,19 +37,9 @@ export async function saveAlert(_prev: AlertFormState, form: FormData): Promise<
   return { ok: true, savedAt: Date.now() };
 }
 
-/** Delete from the list (after the inline confirmation). */
+/** Delete from the edit form (after the confirmation dialog). */
 export async function deleteAlert(id: number): Promise<{ ok: boolean; error?: string }> {
   const result = await apiDelete(`/api/tenant/alerts/${encodeURIComponent(String(id))}`);
-  revalidatePath("/forecast");
-  return result.ok ? { ok: true } : { ok: false, error: result.message };
-}
-
-/** "Turn back on" in the list: same settings, started afresh. */
-export async function turnAlertOn(alert: {
-  id: number; direction: string; rate: number; earlyWarning: boolean; lookAheadDays: number; keepOn: boolean;
-}): Promise<{ ok: boolean; error?: string }> {
-  const { id, ...settings } = alert;
-  const result = await apiPut(`/api/tenant/alerts/${encodeURIComponent(String(id))}`, { ...settings, isOn: true });
   revalidatePath("/forecast");
   return result.ok ? { ok: true } : { ok: false, error: result.message };
 }

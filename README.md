@@ -37,22 +37,24 @@ Prerequisites: .NET SDK 10, Node 22 + pnpm 10, Python 3.12+, Docker.
 # 1. Postgres (TimescaleDB image), Azurite (raw store) and Redis
 docker compose up -d
 
-# 2. Control plane + two dummy tenants (each gets its own database and login)
+# 2. Control plane only. A fresh install has no tenants and no dummy data (production too: the Migrator's
+#    `control` and `tenants` never create one). Companies are created in the tenant admin portal (/admin).
+#    Optional, for testing only: `provision <slug> "<name>"` adds a dummy tenant; `delete-tenant <slug> "<name>"` removes
+#    one; `mark-real <slug>` keeps a tested one as a real company (one way; clear its dummy data first).
 dotnet run --project src/FxOs.Migrator -- control
-dotnet run --project src/FxOs.Migrator -- provision demo_norte "Demo Norte"
-dotnet run --project src/FxOs.Migrator -- provision demo_bajio "Demo Bajío"
 
 # 3. Worker install (rates and forecasts need workers/python/.env with BANXICO_TOKEN; see .env.example)
 cd workers/python && python3 -m venv .venv && .venv/bin/pip install -e ".[dev]" && cd ../..
 
-# 3b. Real rates, interest-rate curves, dummy users, then forecasts
+# 3b. Real rates, interest-rate curves, then forecasts (for every tenant that exists)
 cd workers/python && .venv/bin/fxworkers rates backfill && .venv/bin/fxworkers curves backfill \
-  && .venv/bin/fxworkers seed --all-dummy && .venv/bin/fxworkers forecast run && cd ../..
+  && .venv/bin/fxworkers forecast run && cd ../..
 
 # 4. API on http://localhost:5080
 dotnet run --project src/FxOs.Api
 
-# 5. A login for a dummy tenant (asks for the password: 12+ characters, a number and a symbol, not your name).
+# 5. Platform admin for the portal: dotnet run --project src/FxOs.Migrator -- platform-admin you@example.test "Your Name"
+#    A login for a dummy test tenant (asks for the password: 12+ characters, a number and a symbol, not your name).
 #    --set-by-reset: no password now; set it with "Forgot password?" (the email must be in Email:AllowedRecipients).
 #    --platform-admin: also a platform admin (tenant admin portal, Sprint 3).
 dotnet run --project src/FxOs.Migrator -- dev-user demo_norte you@example.test "Your Name" admin
@@ -130,6 +132,12 @@ nothing). Models, in display order: `forward` (market forward from interest-rate
 (1 + US Treasury·d/365), tenor interpolated, with an EWMA volatility band), `ewma_vol` (point = today's FIX,
 volatility-adaptive band) and `naive` (benchmark). Backtests since 2019 show no model beats naive on the point (the
 forward misses by 1–17% more), so the page presents the forward as today's price to lock in a rate, not a prediction.
+
+Forecast vs actual: each daily `fxworkers forecast run` (after the Banxico sync) stores that day's forecasts, and only
+those are compared with the FIX that followed; nothing is recreated for past days. Exchange Forecast's chart draws an
+orange line over the past: the forecast published N days before each FIX, N being the selected horizon (hover for the
+forecast, the day it was made and the miss). Full history's month view adds the forecast published 7 days before and
+the miss; the day view lists every horizon for that FIX. The line fills in as published forecasts reach their dates.
 A drift variant was tried and dropped. API: `/api/tenant/rates/{source}/analytics` (trend, volatility, 52-week range,
 changes) and `/api/tenant/forecasts/{source}` (models in `forecast_model.display_order`).
 

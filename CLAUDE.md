@@ -81,7 +81,8 @@ MFA/two-step verification.
 - Phase 2: V0004 forecasting (model registry, runs, points with 80/95% intervals, backtests);
   V0005 interest-rate curves (TIIE + US Treasury, `fxworkers curves sync|backfill`) and model display order; models
   `forward` (interest-rate parity), `ewma_vol`, `naive`; `fxworkers forecast run`; APIs for analytics and forecasts; Exchange Forecast follows R-01 (today hero card, trend, 30D volatility level, plum
-  forecast card + 12-month chart with 7D–180D horizon pills, biggest one-day move, rate-gap driver) and
+  forecast card + 12-month chart with 7D–180D horizon pills, biggest one-day move; the bottom-right card lists your rate
+  alerts — empty state introduces alerts with "Create alert" — and opens the header's P2-04 drawer; the rate-gap driver card was removed 2026-11-17) and
   `/forecast/models` follows P4-04 (leaderboard vs naive per horizon). Build screens from the design canvas artboards
   (R-*, P*-*, J*), not from scratch; "Alert me" opens the P2-04 drawer (Phase 4). `/forecast/history` follows R-02:
   year/month/day views (URL-driven), gaps from a deterministic Mexican bank-holiday calendar (`MexicanBankCalendar`),
@@ -184,11 +185,27 @@ MFA/two-step verification.
   `Platform:CheckRateAlerts`, off in tests; only alerts whose FIX date or run changed; event + state + audit in one tenant
   transaction, then `EmailOutbox.EnqueueAsync(..., id)` idempotent; only the creator, only while an active member, and
   only if their U-03 switch is on). Emails `rate_alert_reached` (P2-S2) and `rate_alert_early_warning` (P2-S3), EN/ES,
-  rates with 2 decimals in the profile number format, button → `/forecast?alerts=open`. API `/api/tenant/alerts`
+  rates with 2 decimals in the profile number format, button → `/forecast?alert=<id>` (opens that alert to edit). API `/api/tenant/alerts`
   (GET drawer data, POST, PUT = edit or turn back on, DELETE; your own alerts only, 404 otherwise; max 20).
-  Web: `RateAlertDrawer` — list view when you have alerts (edit, turn back on, delete with inline confirm, add another),
-  form view otherwise; the rate field's placeholder is today's FIX; live odds from `lib/alerts.ts` (mirrors
+  Web: `RateAlertDrawer` — one form: "Alert me" or the card's "+" opens a new alert; a card row opens that alert to
+  edit (saving an off alert turns it back on; "Delete alert" replaces Cancel and asks in `ConfirmDialog`). No list view
+  in the drawer; the Exchange Forecast card lists every alert. The rate field's placeholder is today's FIX; live odds from `lib/alerts.ts` (mirrors
   `RateAlertMath`; the API's value is the one that counts).
+- Forecast vs actual (R-02, before Phase 5): only forecasts the app published on their day (the daily `fxworkers
+  forecast run` after each Banxico sync) are compared; nothing is recreated for past days (tenant V0013 added
+  `forecast_run.origin` + index `forecast_point (horizon_days, target_date)`; V0014 deleted recreated runs and dropped
+  `origin`). API `GET /api/tenant/rates/{source}/history/forecast-check?from&to&horizons=7,15` (≤ 400 days): headline
+  model's forecast whose target falls in (previous FIX, this FIX], naive value (`last_rate`), signed error (FIX −
+  forecast), within 80%, summary MAE vs naive, bias. Web, kept simple: R-01's chart draws an orange line over the past =
+  the forecast published N days before each FIX, N = the selected horizon (hover: FIX, forecast with its date, miss);
+  Full history adds "Forecast 7D before" + "Miss" to the month view and a per-horizon table to the day view. The line
+  grows day by day as published forecasts reach their target dates. The scheduler (`fxworkers rates schedule`) also checks
+  every minute that each active tenant's latest FIX has a forecast (`needs_publish`), so a "Sync now" load, a missed
+  run or a failed tenant still gets that day's forecast; days the scheduler never ran stay empty (never back-filled).
+- Tenants (2026-11-16): a fresh install (and production) starts with no tenants and no dummy data; companies are
+  created in /admin. Locally only ArkusNexus remains (slug `demo_bajio`, converted to real data with Migrator
+  `mark-real`, dummy users cleared); Demo Norte was deleted with Migrator `delete-tenant` (system actor, same rules as
+  A-S3). `TenantAdminService.MarkRealDataAsync` is one way and refuses while profiles without a membership remain.
 - Forecast rule: publish every model's backtest next to the naive benchmark; do not present a model as better than
   naive unless `mae_vs_naive` < 1 for that horizon.
 - Phase 0 sprint 3 (moved to the hosting work): Google Cloud internal environment, deploy workflow running per-tenant

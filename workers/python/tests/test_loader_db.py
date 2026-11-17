@@ -187,3 +187,26 @@ def test_news_sync_fetches_once_within_the_plan_and_reads_back_from_the_database
     calls.clear()
     news_sync.sync(None, store, [tenant], FakeClient(), plan, now + dt.timedelta(hours=1))
     assert calls == []  # nothing new: the move is stored and today's headlines are fresh
+
+
+def test_a_new_fix_needs_a_forecast_until_one_is_published(tenant_db):
+    import math as _m
+    import random as _r
+
+    from fxworkers.forecast.publish import needs_publish, publish
+
+    rng, log, day, rows = _r.Random(9), _m.log(17.0), dt.date(2012, 1, 2), []
+    while day <= dt.date(2026, 11, 12):
+        if day.weekday() < 5:
+            log += rng.gauss(0, 0.005)
+            rows.append(Observation(day, Decimal(str(round(_m.exp(log), 4)))))
+        day += dt.timedelta(days=1)
+    load_observations(tenant_db, "banxico_fix", "raw/rw.json", "e" * 64, rows)
+    assert needs_publish(tenant_db)
+    publish(tenant_db)
+    assert not needs_publish(tenant_db)
+
+    load_observations(tenant_db, "banxico_fix", "raw/next.json", "f" * 64, obs(("2026-11-13", "18.55")))
+    assert needs_publish(tenant_db)
+    assert publish(tenant_db).as_of == dt.date(2026, 11, 13)
+    assert not needs_publish(tenant_db)

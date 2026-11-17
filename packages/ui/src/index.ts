@@ -18,4 +18,5 @@ export {
 } from "./Auth";
 export { PasswordField, type PasswordFieldProps } from "./PasswordField";
 export { Drawer, StepList, type DrawerProps, type Step, type StepState } from "./Admin";
+export { ConfirmDialog, type ConfirmDialogProps } from "./ConfirmDialog";
 export { StepPills, TagGroup, SettingsNav, type StepPill, type Tag, type TagGroupProps, type SettingsNavItem } from "./Setup";

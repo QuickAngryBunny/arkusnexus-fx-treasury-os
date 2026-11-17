@@ -3,7 +3,7 @@ import { AlertBanner, Badge, Breadcrumb, Button, PageHeader, buttonClassName, ty
 import { AppShell } from "@/components/AppShell";
 import { LinkPills } from "@/components/LinkPills";
 import { RefreshWhile } from "@/components/RefreshWhile";
-import { apiGet, type DayStatus, type HistoryDay, type HistoryMonth, type HistorySummary, type HistoryYear } from "@/lib/api";
+import { apiGet, type DayStatus, type ForecastCheck, type HistoryDay, type HistoryMonth, type HistorySummary, type HistoryYear } from "@/lib/api";
 import { CURRENCY_DIGITS, formatDateTime, formatNumber, formatRate, formatSigned, type MessageKey } from "@/lib/i18n";
 import { getSession } from "@/lib/session";
 import { markHoliday, requestSync } from "./actions";
@@ -14,6 +14,9 @@ const SOURCE = "banxico_fix";
 const BASE = `/api/tenant/rates/${SOURCE}`;
 type View = "year" | "month" | "day";
 type Params = { view?: string; y?: string; m?: string; d?: string; done?: string };
+// Forecast vs actual: the month view compares each FIX with the forecast made 7 days before; the day view lists all.
+const CHECK_HORIZON = 7;
+const ALL_HORIZONS = "7,15,30,60,90,180";
 
 const STATUS_TONE: Record<DayStatus, BadgeTone> = {
   ok: "green", revised: "neutral", gap: "orange", holiday: "neutral", holiday_marked: "violet", weekend: "neutral",
@@ -77,11 +80,22 @@ export default async function FullHistoryPage({ searchParams }: { searchParams: 
         ? { label: fmt(`${month}-01`, { month: "long", year: "numeric" }), prev: shiftMonth(month, -1) >= first.slice(0, 7) ? href({ view, m: shiftMonth(month, -1) }) : null, next: shiftMonth(month, 1) <= last.slice(0, 7) ? href({ view, m: shiftMonth(month, 1) }) : null }
         : { label: fmt(day, { dateStyle: "long" }), prev: shiftDay(day, -1) >= first ? href({ view, d: shiftDay(day, -1) }) : null, next: shiftDay(day, 1) <= last ? href({ view, d: shiftDay(day, 1) }) : null };
 
-  const [yearData, monthData, dayData] = await Promise.all([
+  const monthEnd = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).toISOString().slice(0, 10);
+  const checkUrl = (from: string, to: string, horizons: string) =>
+    `${BASE}/history/forecast-check?${new URLSearchParams({ from, to, horizons }).toString()}`;
+  const [yearData, monthData, dayData, check] = await Promise.all([
     view === "year" ? apiGet<HistoryYear>(`${BASE}/history/year/${year}`) : null,
     view === "month" ? apiGet<HistoryMonth>(`${BASE}/history/month/${month.slice(0, 4)}/${Number(month.slice(5, 7))}`) : null,
     view === "day" ? apiGet<HistoryDay>(`${BASE}/history/day/${day}`) : null,
+    view === "year" ? null
+      : apiGet<ForecastCheck>(view === "month" ? checkUrl(`${month}-01`, monthEnd, String(CHECK_HORIZON)) : checkUrl(day, day, ALL_HORIZONS)),
   ]);
+  const checks = check?.ok ? check.data : null;
+  const checkOn = (date: string) => checks?.days.find((d) => d.date === date)?.forecasts.find((f) => f.horizon === CHECK_HORIZON);
+  const miss = (v: number) => (
+    <span className={v > 0 ? "fx-up" : v < 0 ? "fx-down" : undefined}>{formatSigned(numbers, v, CURRENCY_DIGITS)}</span>
+  );
+
 
   const rate = (v: number) => formatRate(numbers, v);
   const statusChip = (st: DayStatus, revision = 1) => (
@@ -248,6 +262,8 @@ export default async function FullHistoryPage({ searchParams }: { searchParams: 
                         <tr>
                           <th scope="col">{t("hist.date")}</th>
                           <th scope="col" className="num">{t("hist.fix")}</th>
+                          <th scope="col" className="num">{t("check.colForecast", { days: CHECK_HORIZON })}</th>
+                          <th scope="col" className="num">{t("check.colMiss")}</th>
                           <th scope="col">{t("hist.source")}</th>
                           <th scope="col">{t("hist.status")}</th>
                           <th scope="col">{t("hist.action")}</th>
@@ -258,6 +274,19 @@ export default async function FullHistoryPage({ searchParams }: { searchParams: 
                           <tr key={d.date} className={d.status === "gap" ? "is-gap" : undefined}>
                             <td><Link href={href({ view: "day", d: d.date })} className="hist-link">{fmt(d.date, { weekday: "short", day: "numeric", month: "short" })}</Link></td>
                             <td className="num">{d.rate !== null ? rate(d.rate) : "—"}</td>
+                            {(() => {
+                              const f = d.rate !== null ? checkOn(d.date) : undefined;
+                              return f ? (
+                                <>
+                                  <td className="num" title={t("check.madeOn", { date: fmt(f.asOf, { dateStyle: "medium" }) })}>
+                                    {rate(f.point)}
+                                  </td>
+                                  <td className="num">{miss(f.error)}</td>
+                                </>
+                              ) : (
+                                <><td className="num muted">—</td><td className="num muted">—</td></>
+                              );
+                            })()}
                             <td className="muted">{d.rate !== null ? t("hist.sourceBanxico") : d.status === "gap" ? t("hist.missing") : "—"}</td>
                             <td>{statusChip(d.status, d.revision)}</td>
                             <td>
@@ -270,7 +299,7 @@ export default async function FullHistoryPage({ searchParams }: { searchParams: 
                     </table>
                   </div>
                 )}
-                <p className="caption">{t("hist.monthNote")}</p>
+                <p className="caption">{t("hist.monthNote")} {t("check.monthNote")}</p>
               </>
             )}
 
@@ -307,6 +336,44 @@ export default async function FullHistoryPage({ searchParams }: { searchParams: 
                     {d.resolution && <p className="caption">{t("hist.dayMarkedBy", { who: d.resolution.resolvedBy, at: formatDateTime(locale, d.resolution.resolvedAt, tz) })}</p>}
                     {d.status === "gap" && gapActions(d.date)}
                   </div>
+                  {(() => {
+                    const fs = checks?.days.find((x) => x.date === d.date)?.forecasts ?? [];
+                    if (d.rate === null || !checks?.model) return null;
+                    return (
+                      <section className="check-day" aria-label={t("check.dayTitle")}>
+                        <strong>{t("check.dayTitle")}</strong>
+                        <span className="caption">{t("check.dayLead", { model: checks.model.name })}</span>
+                        {fs.length === 0 ? (
+                          <p className="caption">{t("check.dayNone")}</p>
+                        ) : (
+                          <div className="table-wrap">
+                            <table className="table hist-table">
+                              <thead>
+                                <tr>
+                                  <th scope="col">{t("check.colMade")}</th>
+                                  <th scope="col" className="num">{t("check.colPoint")}</th>
+                                  <th scope="col" className="num">{t("check.colMiss")}</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {fs.map((f) => (
+                                  <tr key={f.horizon}>
+                                    <td>
+                                      {t("check.daysBefore", { days: f.horizon })}
+                                      <span className="muted"> · {fmt(f.asOf, { day: "numeric", month: "short", year: "numeric" })}</span>
+                                    </td>
+                                    <td className="num">{rate(f.point)}</td>
+                                    <td className="num">{miss(f.error)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                        <span className="caption">{t("check.dayNote")}</span>
+                      </section>
+                    );
+                  })()}
                 </div>
               );
             })()}

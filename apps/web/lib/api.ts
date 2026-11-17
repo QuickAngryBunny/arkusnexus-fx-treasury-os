@@ -348,3 +348,34 @@ export type RateAlerts = {
   maxAlerts: number;
   alerts: RateAlert[];
 };
+
+// Forecast vs actual in Full history (GET /api/tenant/rates/{source}/history/forecast-check).
+export type CheckedForecast = {
+  horizon: number;
+  asOf: string;
+  target: string;
+  point: number;
+  lower80: number;
+  upper80: number;
+  /** The no-change guess: the FIX on the day the forecast was made. */
+  naive: number;
+  /** Actual − forecast: positive = the FIX came in above. */
+  error: number;
+  naiveError: number;
+  within80: boolean;
+};
+
+export type ForecastCheck = {
+  source: string;
+  model: { code: string; name: string } | null;
+  horizons: number[];
+  days: { date: string; actual: number; forecasts: CheckedForecast[] }[];
+  summary: {
+    horizon: number;
+    n: number;
+    mae: number | null;
+    naiveMae: number | null;
+    bias: number | null;
+    within80: number;
+  }[];
+};

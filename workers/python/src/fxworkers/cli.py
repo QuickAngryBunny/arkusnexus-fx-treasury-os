@@ -102,6 +102,11 @@ def _schedule(args: argparse.Namespace) -> int:
             _requests(argparse.Namespace())  # "Sync now" from the Full history page, checked every minute
         except Exception as e:
             print(f"Sync requests failed: {e}", file=sys.stderr, flush=True)
+        if args.forecast:
+            try:
+                _forecast_due()  # every company's latest FIX gets its forecast, whatever loaded it
+            except Exception as e:
+                print(f"Forecast check failed: {e}", file=sys.stderr, flush=True)
         if wait > 0:
             if int(wait) % 3600 < 60:
                 print(f"Next sync at {when.isoformat(timespec='minutes')}", flush=True)
@@ -170,6 +175,30 @@ def _news(args: argparse.Namespace) -> int:
     print(f"news: {stats['tenants']} tenants, {stats['moves']} flagged moves, {stats['windows_fetched']} windows fetched, "
           f"{stats['requests']} GNews requests", flush=True)
     return 0
+
+
+def _forecast_due() -> int:
+    """Publish for every active tenant whose latest FIX has no forecast yet (a "Sync now" load, a missed scheduled run,
+    a tenant that failed). The forecast is made from the data as it stands, so it is the one the app would have shown.
+    Returns the tenants published."""
+    import psycopg
+
+    from .control_plane import connect_tenant, control_plane_dsn, list_tenants
+    from .forecast.publish import needs_publish, publish
+
+    published = 0
+    with psycopg.connect(control_plane_dsn()) as cp:
+        for tenant in [t for t in list_tenants(cp) if t.status == "active"]:
+            try:
+                with connect_tenant(cp, tenant) as conn:
+                    if not needs_publish(conn):
+                        continue
+                    r = publish(conn)
+                published += 1
+                print(f"{tenant.slug}: forecast published as of {r.as_of} (runs {r.runs_inserted})", flush=True)
+            except Exception as e:
+                print(f"{tenant.slug}: forecast FAILED ({e})", file=sys.stderr, flush=True)
+    return published
 
 
 def _forecast(args: argparse.Namespace) -> int:

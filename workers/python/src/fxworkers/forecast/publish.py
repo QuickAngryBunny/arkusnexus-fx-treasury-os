@@ -55,6 +55,30 @@ def load_curves(conn: psycopg.Connection) -> Curves:
     return Curves(by_currency)
 
 
+def _register_models(cur: psycopg.Cursor) -> None:
+    for m in MODELS:
+        cur.execute(
+            """
+            insert into forecast_model (code, version, name, description, params, is_benchmark, display_order)
+            values (%s, %s, %s, %s, %s::jsonb, %s, %s)
+            on conflict (code, version) do update set display_order = excluded.display_order
+            """,
+            (m.code, m.version, m.name, m.description, json.dumps(m.params), m.is_benchmark, m.display_order),
+        )
+
+
+def needs_publish(conn: psycopg.Connection, source_code: str = "banxico_fix") -> bool:
+    """True when the tenant's latest FIX has no forecast run yet (none published after it loaded)."""
+    row = conn.execute(
+        """
+        select (select max(rate_date) from fx_rate where source_code = %s)
+             > coalesce((select max(as_of_date) from forecast_run where source_code = %s), date '0001-01-01')
+        """,
+        (source_code, source_code),
+    ).fetchone()
+    return bool(row and row[0])
+
+
 def publish(conn: psycopg.Connection, source_code: str = "banxico_fix") -> PublishResult:
     """Idempotent: a forecast for an as-of date that is already stored is kept as it was."""
     result = PublishResult()
@@ -65,15 +89,7 @@ def publish(conn: psycopg.Connection, source_code: str = "banxico_fix") -> Publi
     as_of = result.as_of = h.dates[i]
 
     with conn.transaction(), conn.cursor() as cur:
-        for m in MODELS:
-            cur.execute(
-                """
-                insert into forecast_model (code, version, name, description, params, is_benchmark, display_order)
-                values (%s, %s, %s, %s, %s::jsonb, %s, %s)
-                on conflict (code, version) do update set display_order = excluded.display_order
-                """,
-                (m.code, m.version, m.name, m.description, json.dumps(m.params), m.is_benchmark, m.display_order),
-            )
+        _register_models(cur)
 
         naive_mae: dict[int, float] = {}
         scores = {m.code: {hz: backtest(h, m, hz) for hz in HORIZONS} for m in MODELS}
@@ -130,3 +146,4 @@ def publish(conn: psycopg.Connection, source_code: str = "banxico_fix") -> Publi
                 (ACTOR, source_code, json.dumps({"as_of": as_of.isoformat(), "models": [m.code for m in MODELS]})),
             )
     return result
+

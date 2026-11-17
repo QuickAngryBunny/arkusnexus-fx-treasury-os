@@ -37,6 +37,9 @@ export type ChartLabels = {
   low: string; // hover: bottom of the 80% range
   bigMove: string; // legend: flagged move marker
   modelPoints: string; // legend: dots = values published by the model
+  pastForecast: string; // legend: orange line = forecast made {days} days before each past FIX
+  madeOn: string; // tooltip: "Forecast made {date}"
+  miss: string; // tooltip: FIX − forecast
   pickHint: string; // "Tap a marker, or Today, …"
   todayButton: string; // "Today · 11 Nov"
 };
@@ -68,6 +71,11 @@ export type ChartData = {
   history: { day: number; rate: number }[]; // day = days since 1970-01-01, oldest first
   /** Every published point of the headline model (7, 15, 30, 60, 90, 180 days), oldest first. */
   fan: { horizonDays: number; day: number; point: number; lower80: number; upper80: number; lower95: number; upper95: number }[];
+  /**
+   * Past forecasts: for each past FIX, the headline model's forecast published `horizonDays` before it (only forecasts
+   * the app actually made that day). The selected horizon's series is the orange line over the past.
+   */
+  past: { horizonDays: number; day: number; point: number; madeOn: number }[];
   /** Flagged moves (beyond ±2σ), drawn as clickable markers when inside the visible window. */
   moves: { key: string; day: number; rate: number; aria: string }[];
   labels: ChartLabels;
@@ -108,10 +116,11 @@ export function ForecastCard({ label, link }: { label: string; link?: ReactNode 
 const W = 720;
 const H = 240;
 const DAY_MS = 86_400_000;
-const COLORS = { fix: "#6C10E0", expected: "#3E1F55", band80: "#D9C4F2", band95: "#EFE6FB", marker: "#E8582E" };
+const COLORS = { fix: "#6C10E0", expected: "#3E1F55", band80: "#D9C4F2", band95: "#EFE6FB", marker: "#E8582E", past: "#E8582E" };
 
+type PastForecast = { point: number; madeOn: number };
 type Hover =
-  | { kind: "past"; x: number; day: number; rate: number }
+  | { kind: "past"; x: number; day: number; rate: number; forecast: PastForecast | null }
   | { kind: "future"; x: number; day: number; horizonDays: number; expected: number; lo80: number; hi80: number; lo95: number; hi95: number };
 
 /**
@@ -142,7 +151,13 @@ export function RateChart({ data }: { data: ChartData }) {
     const x = (day: number) => ((Math.max(day, start) - start) / (end - start)) * W;
     const split = x(last.day);
 
-    const values = [...hist.map((p) => p.rate), ...data.fan.filter((p) => p.horizonDays <= horizon.days).flatMap((p) => [p.lower95, p.upper95])];
+    // The forecast made `horizon.days` before each FIX in the window (the orange line).
+    const past = (data.past ?? []).filter((p) => p.horizonDays === horizon.days && p.day >= start && p.day <= last.day);
+    const pastByDay = new Map(past.map((p) => [p.day, p]));
+    const values = [
+      ...hist.map((p) => p.rate), ...past.map((p) => p.point),
+      ...data.fan.filter((p) => p.horizonDays <= horizon.days).flatMap((p) => [p.lower95, p.upper95]),
+    ];
     const min = Math.min(...values);
     const max = Math.max(...values);
     const step = niceStep((max - min) / 4);
@@ -152,6 +167,7 @@ export function RateChart({ data }: { data: ChartData }) {
     const yLast = y(last.rate);
 
     const line = hist.map((p, i) => `${i ? "L" : "M"}${x(p.day).toFixed(1)},${y(p.rate).toFixed(1)}`).join(" ");
+    const pastLine = past.map((p, i) => `${i ? "L" : "M"}${x(p.day).toFixed(1)},${y(p.point).toFixed(1)}`).join(" ");
     // The fan follows the model's published horizons (not a straight wedge), so every width shown is a model value.
     const pts = data.fan.filter((p) => p.horizonDays <= horizon.days);
     const today = { day: last.day, point: last.rate, lower80: last.rate, upper80: last.rate, lower95: last.rate, upper95: last.rate };
@@ -179,7 +195,7 @@ export function RateChart({ data }: { data: ChartData }) {
     }
 
     const markers = data.moves.filter((m) => m.day >= start).map((m) => ({ ...m, left: (x(m.day) / W) * 100, top: (y(m.rate) / H) * 100 }));
-    return { hist, start, end, last, x, y, split, yLast, line, grid, ticks, markers, pts,
+    return { hist, start, end, last, x, y, split, yLast, line, pastLine, pastByDay, grid, ticks, markers, pts,
       band95: band("lower95", "upper95"), band80: band("lower80", "upper80"),
       base: `M${edge("point").join(" L")}` };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -194,7 +210,8 @@ export function RateChart({ data }: { data: ChartData }) {
       // Nearest stored FIX.
       let best = geo.hist[0]!;
       for (const p of geo.hist) if (Math.abs(p.day - day) < Math.abs(best.day - day)) best = p;
-      setHover({ kind: "past", x: geo.x(best.day), day: best.day, rate: best.rate });
+      const f = geo.pastByDay.get(best.day);
+      setHover({ kind: "past", x: geo.x(best.day), day: best.day, rate: best.rate, forecast: f ? { point: f.point, madeOn: f.madeOn } : null });
     } else {
       // Snap to the nearest published model point: every value shown comes straight from the model.
       let best = geo.pts[0]!;
@@ -233,6 +250,7 @@ export function RateChart({ data }: { data: ChartData }) {
           ))}
           <path d={geo.band95} fill={COLORS.band95} />
           <path d={geo.band80} fill={COLORS.band80} />
+          {geo.pastLine && <path d={geo.pastLine} fill="none" stroke={COLORS.past} strokeWidth={2.5} strokeLinejoin="round" />}
           <path d={geo.line} fill="none" stroke={COLORS.fix} strokeWidth={2.5} strokeLinejoin="round" />
           <path d={geo.base} stroke={COLORS.expected} strokeWidth={2.5} strokeDasharray="6 5" fill="none" />
           {geo.pts.map((p) => (
@@ -251,7 +269,10 @@ export function RateChart({ data }: { data: ChartData }) {
             <g pointerEvents="none">
               <path d={`M${hover.x.toFixed(1)} 0V${H}`} stroke="#3E1F55" strokeOpacity={0.35} />
               {hover.kind === "past" ? (
-                <circle cx={hover.x} cy={geo.y(hover.rate)} r={5} fill={COLORS.fix} stroke="#FFFFFF" strokeWidth={2} />
+                <>
+                  {hover.forecast && <circle cx={hover.x} cy={geo.y(hover.forecast.point)} r={5} fill={COLORS.past} stroke="#FFFFFF" strokeWidth={2} />}
+                  <circle cx={hover.x} cy={geo.y(hover.rate)} r={5} fill={COLORS.fix} stroke="#FFFFFF" strokeWidth={2} />
+                </>
               ) : (
                 <>
                   <circle cx={hover.x} cy={geo.y(hover.hi80)} r={4} fill="#FFFFFF" stroke={COLORS.expected} strokeWidth={2} />
@@ -281,6 +302,14 @@ export function RateChart({ data }: { data: ChartData }) {
             <strong>{df.format(dateOf(hover.day))}</strong>
             <dl>
               <dt><i style={{ background: COLORS.fix }} />{L.fix}</dt><dd>{fmt(hover.rate)}</dd>
+              {hover.forecast && (
+                <>
+                  <dt><i style={{ background: COLORS.past }} />{L.madeOn.replace("{date}", df.format(dateOf(hover.forecast.madeOn)))}</dt>
+                  <dd>{fmt(hover.forecast.point)}</dd>
+                  <dt>{L.miss}</dt>
+                  <dd>{new Intl.NumberFormat(data.numberLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: "exceptZero" }).format(hover.rate - hover.forecast.point)}</dd>
+                </>
+              )}
             </dl>
           </div>
         )}
@@ -330,6 +359,7 @@ export function RateChart({ data }: { data: ChartData }) {
 
       <ul className="fx-legend">
         <li><i style={{ background: COLORS.fix }} />{L.fix}</li>
+        {geo.pastLine && <li><i style={{ background: COLORS.past }} />{L.pastForecast.replace("{days}", String(horizon.days))}</li>}
         <li><i className="is-dash" style={{ borderColor: COLORS.expected }} />{L.expected}</li>
         <li><i className="is-dot" style={{ background: COLORS.expected }} />{L.modelPoints}</li>
         <li><i className="is-band" style={{ background: COLORS.band80 }} />{L.range80}</li>
