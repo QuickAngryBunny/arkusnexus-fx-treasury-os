@@ -44,10 +44,11 @@ public sealed class TenantAccountsSchemaTests(PlatformFixture fx)
         var types = (await conn.QueryAsync<(string Code, bool DefaultEnabled, bool ApproversOnly)>(
             "select code, default_enabled, approvers_only from notification_type order by sort_order")).ToList();
 
-        Assert.Equal(9, types.Count);
-        Assert.Equal(("weekly_forecast_summary", false, false), types[^1]);
+        // The nine brief items plus the Phase 4 early warning (tenant V0012).
+        Assert.Equal(10, types.Count);
+        Assert.Equal(("rate_early_warning", true, false), types[^1]);
+        Assert.Equal(["weekly_forecast_summary"], types.Where(t => !t.DefaultEnabled).Select(t => t.Code));
         Assert.Equal(["approval_request"], types.Where(t => t.ApproversOnly).Select(t => t.Code));
-        Assert.All(types.Take(8), t => Assert.True(t.DefaultEnabled));
 
         var userId = Guid.NewGuid();
         await conn.ExecuteAsync(

@@ -19,6 +19,12 @@ if (builder.Configuration.GetValue("Platform:MirrorControlAudit", true))
     builder.Services.AddHostedService<FxOs.Platform.Audit.ControlAuditMirrorService>();
 }
 
+// Rate alerts and early warnings (Phase 4): checked every minute against each company's newest FIX and forecast run.
+if (builder.Configuration.GetValue("Platform:CheckRateAlerts", true))
+{
+    builder.Services.AddHostedService<FxOs.Platform.Alerts.RateAlertCheckerService>();
+}
+
 var app = builder.Build();
 var settings = app.Services.GetRequiredService<PlatformSettings>();
 
@@ -45,6 +51,7 @@ app.MapCompanyEndpoints();
 app.MapTeamEndpoints();
 app.MapRateEndpoints();
 app.MapForecastEndpoints();
+app.MapAlertEndpoints();
 app.MapRateHistoryEndpoints();
 app.MapNewsEndpoints();
 

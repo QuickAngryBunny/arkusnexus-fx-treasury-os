@@ -28,6 +28,9 @@ public sealed class AppLinks(Uri publicBaseUrl)
 
     public Uri Team => new(Base, "settings/team");
 
+    /// <summary>Exchange Forecast with the rate alert drawer open on the person's alerts (P2-04).</summary>
+    public Uri RateAlerts => new(Base, "forecast?alerts=open");
+
     public Uri Dashboard => Base;
 }
 

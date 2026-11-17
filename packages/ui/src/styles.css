@@ -68,6 +68,7 @@
 select.vi-field__control { padding: 0 12px; font-weight: 600; }
 .vi-field__control:focus { outline: none; border-color: var(--vi-violet); box-shadow: var(--vi-focus); }
 .vi-field--emphasis .vi-field__control { border: 2px solid var(--vi-violet); font-size: 22px; font-weight: 800; }
+.vi-field__control::placeholder { color: var(--vi-muted); opacity: 0.6; font-weight: 600; }
 .vi-field--invalid .vi-field__control { border-color: var(--vi-orange-ink); }
 .vi-field__hint { font-size: 12px; font-weight: 500; color: var(--vi-muted); }
 .vi-field__error { font-size: 12px; font-weight: 700; color: var(--vi-orange-ink); }
@@ -429,6 +430,31 @@ a.vi-stat:hover { background: var(--vi-selected); }
 .vi-drawer__foot > * { flex: 1; }
 .vi-drawer__foot > *:last-child { flex: 2; }
 @media (max-width: 520px) { .vi-drawer__panel { border-radius: var(--vi-radius-banner) var(--vi-radius-banner) 0 0; top: auto; max-height: 92vh; width: 100%; } }
+
+/* ── Rate alert drawer (P2-04) ──────────────────────────── */
+.vi-alert-preview { padding: 14px; border-radius: 20px; background: var(--vi-canvas); display: flex; flex-direction: column; gap: 6px; }
+.vi-alert-preview__head { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--vi-ink-2); }
+.vi-alert-preview__odds { font-size: 12px; line-height: 1.45; color: var(--vi-muted); }
+.vi-alert-chart { display: block; }
+.vi-alert-chart__band { fill: var(--vi-line); }
+.vi-alert-chart__line { fill: none; stroke: var(--vi-violet); stroke-width: 4; stroke-linejoin: round; }
+.vi-alert-chart__center { fill: none; stroke: var(--vi-plum); stroke-width: 4; stroke-dasharray: 8 6; }
+.vi-alert-chart__target { stroke: var(--vi-orange); stroke-width: 3; stroke-dasharray: 10 8; }
+.vi-alert-chart__tag { fill: var(--vi-orange); }
+.vi-alert-chart__tagText { fill: var(--vi-white); font-family: var(--vi-font); font-size: 22px; font-weight: 800; }
+.vi-alert-option { border-radius: 20px; border: 1.5px solid var(--vi-line); padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.vi-alert-option--on { border-color: var(--vi-lilac); }
+.vi-alert-option > .vi-switch { border: 0; background: transparent; padding: 0; min-height: 0; }
+.vi-alert-option__more { display: flex; flex-direction: column; gap: 6px; }
+.vi-alerts__intro { margin: 0; font-size: 14px; line-height: 1.5; color: var(--vi-ink-2); }
+.vi-alerts { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.vi-alerts__item { padding: 14px; border-radius: 20px; border: 1.5px solid var(--vi-line); display: flex; flex-direction: column; gap: 8px; }
+.vi-alerts__item--off { background: var(--vi-canvas); border-color: transparent; }
+.vi-alerts__top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.vi-alerts__top strong { font-size: 16px; color: var(--vi-ink); }
+.vi-alerts__meta { font-size: 13px; line-height: 1.45; color: var(--vi-muted); }
+.vi-alerts__actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.vi-alerts__confirm { font-size: 13px; font-weight: 700; color: var(--vi-danger); margin-right: auto; }
 
 /* ── Step list (A-03, A-S2) ─────────────────────────────── */
 .vi-steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; font-family: var(--vi-font); }

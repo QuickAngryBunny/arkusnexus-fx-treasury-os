@@ -15,6 +15,8 @@ public static class EmailTemplate
     public const string EmailChangeConfirmation = "email_change_confirmation";
     public const string RoleChanged = "role_changed";
     public const string AccountDeactivated = "account_deactivated";
+    public const string RateAlertReached = "rate_alert_reached";
+    public const string RateAlertEarlyWarning = "rate_alert_early_warning";
 }
 
 /// <summary>Times in emails are shown in the reader's time zone with its abbreviation, e.g. "14 Nov 2026, 09:42 (GMT-08:00)".</summary>
@@ -59,6 +61,23 @@ public sealed record EmailChangeConfirmationModel(string Name, string NewEmail, 
 public sealed record RoleChangedModel(Guid TenantId, string Name, string Company, string NewRole, string ChangedBy, Uri AppLink);
 
 public sealed record AccountDeactivatedModel(Guid TenantId, string Name, string Company, string DeactivatedBy);
+
+/// <summary>A stored forecast horizon for an email: central value and 8-in-10 range.</summary>
+public sealed record EmailForecast(int Days, decimal Point, decimal Lower80, decimal Upper80);
+
+/// <summary>
+/// P2-S2. <paramref name="NumberFormat"/> is the profile's (period_decimal / comma_decimal); rates show 2 decimals.
+/// <paramref name="AlertsLink"/> opens Exchange Forecast with the alert list.
+/// </summary>
+public sealed record RateAlertReachedModel(
+    Guid TenantId, string Name, string Direction, decimal Rate, DateOnly FixDate, decimal Fix, bool KeepOn,
+    EmailForecast? Forecast, string NumberFormat, Uri AlertsLink);
+
+/// <summary>P2-S3: the trend over the last <paramref name="TrendWindow"/> moves and the chance within the look-ahead.</summary>
+public sealed record RateAlertEarlyWarningModel(
+    Guid TenantId, string Name, string Direction, decimal Rate, DateOnly FixDate, decimal Fix, bool KeepOn,
+    int LookAheadDays, int TrendMoves, int TrendWindow, double Chance, EmailForecast? Forecast, string NumberFormat,
+    Uri AlertsLink);
 
 /// <summary>
 /// The Phase 3 emails in English and Spanish (brief §3). Each returns an <see cref="EmailMessage"/> ready for
@@ -250,6 +269,102 @@ public static class EmailTemplates
         return Build(EmailTemplate.AccountDeactivated, locale, to, m.TenantId,
             es ? $"Tu acceso a {m.Company} fue desactivado" : $"Your access to {m.Company} was deactivated", layout);
     }
+
+    public static EmailMessage RateAlertReached(string locale, string to, RateAlertReachedModel m)
+    {
+        var es = IsEs(locale);
+        var n = Numbers(m.NumberFormat);
+        var rate = Rate(m.Rate, n);
+        var above = m.Direction == "above";
+        var layout = new EmailLayout
+        {
+            Eyebrow = es ? $"FIX de Banxico de hoy · {FixDay(m.FixDate, es)}" : $"Today’s Banxico FIX · {FixDay(m.FixDate, es)}",
+            Title = $"USD/MXN {Rate(m.Fix, n)}",
+            Subtitle = es
+                ? (above ? $"Por encima de tu alerta de {rate}" : $"Por debajo de tu alerta de {rate}")
+                : (above ? $"Above your {rate} alert" : $"Below your {rate} alert"),
+            Greeting = Hi(es, m.Name),
+            Footnote = m.KeepOn
+                ? (es
+                    ? $"Tu alerta sigue activa: recibirás otro correo cada vez que el tipo de cambio vuelva a cruzar {rate}. Puedes editarla o apagarla en Pronóstico cambiario."
+                    : $"Your alert stays on: you’ll get another email each time the rate crosses {rate} again. Edit or turn it off in Exchange Forecast.")
+                : (es
+                    ? "Esta alerta ya está apagada, así que no recibirás más correos sobre ella. Puedes volver a encenderla en Pronóstico cambiario."
+                    : "This alert is now off, so you won’t get more emails about it. You can turn it back on in Exchange Forecast."),
+        };
+        layout.Paragraph(Plain(es
+            ? (above ? "El USD/MXN cerró por encima del nivel que definiste." : "El USD/MXN cerró por debajo del nivel que definiste.")
+            : (above ? "USD/MXN closed above the level you set." : "USD/MXN closed below the level you set.")));
+        if (m.Forecast is { } f)
+        {
+            layout.Paragraph(Plain(es
+                ? $"Pronóstico a {f.Days} días: {Rate(f.Point, n)} (8 de 10 probabilidades entre {Rate(f.Lower80, n)} y {Rate(f.Upper80, n)}). Es una estimación, no una recomendación para convertir."
+                : $"{f.Days}-day forecast: {Rate(f.Point, n)} (8 in 10 chance between {Rate(f.Lower80, n)} and {Rate(f.Upper80, n)}). This is an estimate, not advice to convert."));
+        }
+
+        layout.Button(es ? "Abrir FX Intelligence" : "Open FX Intelligence", m.AlertsLink);
+        return Build(EmailTemplate.RateAlertReached, locale, to, m.TenantId,
+            es ? $"El USD/MXN llegó a {rate} · tu alerta" : $"USD/MXN reached {rate} · your alert", layout);
+    }
+
+    public static EmailMessage RateAlertEarlyWarning(string locale, string to, RateAlertEarlyWarningModel m)
+    {
+        var es = IsEs(locale);
+        var n = Numbers(m.NumberFormat);
+        var rate = Rate(m.Rate, n);
+        var above = m.Direction == "above";
+        var away = Rate(Math.Abs(m.Rate - m.Fix), n);
+        var pct = (int)Math.Round(m.Chance * 100, MidpointRounding.AwayFromZero);
+        var layout = new EmailLayout
+        {
+            Eyebrow = es ? $"Aviso anticipado · FIX de Banxico · {FixDay(m.FixDate, es)}" : $"Early warning · Banxico FIX · {FixDay(m.FixDate, es)}",
+            Title = $"USD/MXN {Rate(m.Fix, n)}",
+            Subtitle = es
+                ? $"{(above ? "Subiendo" : "Bajando")} hacia tu alerta de {rate} · a {away}"
+                : $"{(above ? "Rising" : "Falling")} toward your {rate} alert · {away} away",
+            Greeting = Hi(es, m.Name),
+            Footnote = es
+                ? "No habrá más avisos anticipados para esta tendencia. Puedes editar la alerta o apagar los avisos anticipados en Pronóstico cambiario."
+                : "No more early warnings for this trend. Edit the alert or turn early warnings off in Exchange Forecast.",
+        };
+        layout.Paragraph(Plain(es
+                ? $"El USD/MXN aún no llega a tu alerta de {rate}, pero {(above ? "subió" : "bajó")} en {m.TrendMoves} de los últimos {m.TrendWindow} días y el pronóstico ahora indica que es "
+                : $"USD/MXN hasn’t reached your {rate} alert yet, but it has {(above ? "risen" : "fallen")} on {m.TrendMoves} of the last {m.TrendWindow} days and the forecast now says it’s "),
+            Strong(es ? $"más probable que no ({pct}%)" : $"more likely than not ({pct}%)"),
+            Plain(es ? $" que llegue a {rate} en {m.LookAheadDays} días." : $" to reach {rate} within {m.LookAheadDays} days."));
+        var bullets = new List<string>
+        {
+            es ? $"Tendencia: {(above ? "al alza" : "a la baja")}, {m.TrendMoves} de los últimos {m.TrendWindow} días"
+               : $"Trend: {(above ? "rising" : "falling")}, {m.TrendMoves} of the last {m.TrendWindow} days",
+        };
+        if (m.Forecast is { } f)
+        {
+            bullets.Add(es
+                ? $"Pronóstico a {f.Days} días: {Rate(f.Point, n)} (8 de 10: {Rate(f.Lower80, n)}–{Rate(f.Upper80, n)})"
+                : $"{f.Days}-day forecast: {Rate(f.Point, n)} (8 in 10: {Rate(f.Lower80, n)}–{Rate(f.Upper80, n)})");
+        }
+
+        bullets.Add(es ? $"Probabilidad de llegar a {rate}: {pct}%" : $"Chance of reaching {rate}: {pct}%");
+        layout.Bullets([.. bullets])
+            .Paragraph(Plain(es
+                ? (m.KeepOn
+                    ? $"Tu alerta de {rate} sigue activa: recibirás un correo cada vez que el tipo de cambio llegue a ese nivel. Es una estimación, no una recomendación para convertir."
+                    : $"Tu alerta de {rate} sigue activa: recibirás un correo más si el tipo de cambio llega a ese nivel, y después la alerta se apaga. Es una estimación, no una recomendación para convertir.")
+                : (m.KeepOn
+                    ? $"Your {rate} alert is still on: you’ll get an email each time the rate reaches it. This is an estimate, not advice to convert."
+                    : $"Your {rate} alert is still on: you’ll get one more email if the rate reaches it, and then the alert switches off. This is an estimate, not advice to convert.")))
+            .Button(es ? "Abrir FX Intelligence" : "Open FX Intelligence", m.AlertsLink);
+        return Build(EmailTemplate.RateAlertEarlyWarning, locale, to, m.TenantId,
+            es ? $"Aviso anticipado · el USD/MXN va hacia {rate}" : $"Early warning · USD/MXN is trending toward {rate}", layout);
+    }
+
+    // Rates show 2 decimals in the profile's number format (CLAUDE.md); storage keeps full precision.
+    private static CultureInfo Numbers(string numberFormat) =>
+        CultureInfo.GetCultureInfo(numberFormat == "comma_decimal" ? "de-DE" : "en-US");
+
+    private static string Rate(decimal value, CultureInfo numbers) => value.ToString("N2", numbers);
+
+    private static string FixDay(DateOnly day, bool es) => day.ToString("ddd d MMM", Culture(es));
 
     private static EmailMessage Build(string template, string locale, string to, Guid? tenantId, string subject, EmailLayout layout)
     {

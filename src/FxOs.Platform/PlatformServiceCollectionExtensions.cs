@@ -98,6 +98,7 @@ public static class PlatformServiceCollectionExtensions
         services.AddSingleton<SignInService>();
         services.AddSingleton<EmailClocks>();
         services.AddSingleton<FxOs.Platform.Audit.ControlAuditMirror>();
+        services.AddSingleton<FxOs.Platform.Alerts.RateAlertChecker>();
         services.AddSingleton<PasswordResetService>();
         services.AddSingleton<DevAccountService>();
         services.AddSingleton<TenantAdminService>();

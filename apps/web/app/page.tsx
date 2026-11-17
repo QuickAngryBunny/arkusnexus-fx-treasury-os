@@ -14,7 +14,7 @@ const toDay = (iso: string) => Math.round(Date.parse(`${iso}T00:00:00Z`) / DAY_M
 
 /**
  * Dashboard (O-05): today's rate card with the same real FIX and model forecast as Exchange Forecast, the welcome
- * notice after onboarding or joining, the latest news, the first-conversion-plan card (Phase 4 enables it), an empty
+ * notice after onboarding or joining, the latest news, the first-conversion-plan card (Phase 5 enables it), an empty
  * "Ongoing conversions" card and, for admins, "Invite your team".
  */
 export default async function Dashboard({ searchParams }: { searchParams: Promise<{ welcome?: string; joined?: string }> }) {

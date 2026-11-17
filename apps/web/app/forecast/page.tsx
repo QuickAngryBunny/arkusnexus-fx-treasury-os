@@ -2,7 +2,8 @@ import Link from "next/link";
 import { AlertBanner, Button, HeroCard, PageHeader, StatCard } from "@fxos/ui";
 import { AppShell } from "@/components/AppShell";
 import { ForecastCard, HorizonProvider, NewsCard, RateChart, type ChartData, type HorizonData, type NewsEvent } from "@/components/forecast/HorizonView";
-import { apiGet, type Forecasts, type LatestRate, type NewsFeed, type RateAnalytics, type RateHistory, type RateSource } from "@/lib/api";
+import { RateAlertDrawer, type AlertDrawerLabels } from "@/components/forecast/RateAlertDrawer";
+import { apiGet, type Forecasts, type LatestRate, type NewsFeed, type RateAlerts, type RateAnalytics, type RateHistory, type RateSource } from "@/lib/api";
 import { CURRENCY_DIGITS, formatDateTime, formatRate, formatSigned, type Locale, type MessageKey, type Translate } from "@/lib/i18n";
 import { getSession } from "@/lib/session";
 
@@ -13,15 +14,18 @@ const DAY_MS = 86_400_000;
 const toDay = (iso: string) => Math.round(Date.parse(`${iso}T00:00:00Z`) / DAY_MS);
 
 /** Exchange Forecast (R-01): today, trend, volatility and forecast up front; 12 months → forecast chart; drivers. */
-export default async function ForecastPage() {
-  const { tenant, profile, locale, numbers, t } = await getSession();
+export default async function ForecastPage({ searchParams }: { searchParams: Promise<{ alerts?: string }> }) {
+  const { tenant, profile, locale, numbers, t, viewer } = await getSession();
+  // Alert emails link here with ?alerts=open (the drawer opens on the person's alerts).
+  const openAlerts = (await searchParams).alerts === "open";
+  let alertsNode: React.ReactNode = <AlertMeButton t={t} />;
   const fmtDate = (iso: string, opts: Intl.DateTimeFormatOptions) =>
     new Intl.DateTimeFormat(locale, { ...opts, timeZone: "UTC" }).format(new Date(`${iso}T00:00:00Z`));
 
   const shell = (body: React.ReactNode, eyebrow = t("fx.eyebrowNoSync")) => (
     <AppShell active="forecast">
       <div className="stack-sm">
-        <PageHeader title={t("nav.forecast")} eyebrow={eyebrow} actions={<HeaderActions t={t} />} />
+        <PageHeader title={t("nav.forecast")} eyebrow={eyebrow} actions={<HeaderActions t={t} alerts={alertsNode} />} />
         {body}
       </div>
     </AppShell>
@@ -31,12 +35,19 @@ export default async function ForecastPage() {
     return shell(<AlertBanner tone="info" title={t("session.signInTitle")}>{t("session.signInBody")}</AlertBanner>);
   }
 
-  const [latest, sources, analytics, forecasts] = await Promise.all([
+  const [latest, sources, analytics, forecasts, alerts] = await Promise.all([
     apiGet<LatestRate>(`/api/tenant/rates/${SOURCE}/latest`),
     apiGet<RateSource[]>("/api/tenant/rates/sources"),
     apiGet<RateAnalytics>(`/api/tenant/rates/${SOURCE}/analytics`),
     apiGet<Forecasts>(`/api/tenant/forecasts/${SOURCE}`),
+    apiGet<RateAlerts>("/api/tenant/alerts"),
   ]);
+  if (alerts.ok && alerts.data.today) {
+    alertsNode = (
+      <RateAlertDrawer data={alerts.data} labels={alertLabels(t)} numbers={numbers} locale={locale}
+        email={viewer?.email ?? ""} icon={<BellIcon />} initialOpen={openAlerts} />
+    );
+  }
   if (!latest.ok) {
     return shell(
       latest.status === 404
@@ -304,13 +315,19 @@ export default async function ForecastPage() {
   return shell(body, eyebrow);
 }
 
-function HeaderActions({ t }: { t: Translate }) {
-  // Rate alerts (P2-04) are the next screen to build.
+/** "Alert me" before there's a rate to alert on (signed out, empty history): shown, not usable. */
+function AlertMeButton({ t }: { t: Translate }) {
+  return (
+    <Button variant="secondary" disabled>
+      <BellIcon /> {t("fx.alertMe")}
+    </Button>
+  );
+}
+
+function HeaderActions({ t, alerts }: { t: Translate; alerts: React.ReactNode }) {
   return (
     <>
-      <Button variant="secondary" disabled title={t("fx.comingSoon")}>
-        <BellIcon /> {t("fx.alertMe")}
-      </Button>
+      {alerts}
       <Button variant="secondary" href="/forecast/history" linkAs={Link}>
         <HistoryIcon /> {t("fx.fullHistory")}
       </Button>
@@ -353,4 +370,71 @@ function HistoryIcon() {
       <path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 3" />
     </svg>
   );
+}
+
+function alertLabels(t: Translate): AlertDrawerLabels {
+  return {
+    open: t("fx.alertMe"),
+    kicker: t("fx.alertsKicker"),
+    titleNew: t("alert.titleNew"),
+    titleEdit: t("alert.titleEdit"),
+    titleList: t("alert.titleList"),
+    close: t("alert.close"),
+    done: t("alert.done"),
+    listIntro: t("alert.listIntro"),
+    above: t("alert.above"),
+    below: t("alert.below"),
+    chance30: t("alert.chance30"),
+    earlyOn: t("alert.earlyOn"),
+    earlyOff: t("alert.earlyOff"),
+    keepOnShort: t("alert.keepOnShort"),
+    keepOffShort: t("alert.keepOffShort"),
+    statusOn: t("alert.statusOn"),
+    statusOff: t("alert.statusOff"),
+    statusReached: t("alert.statusReached"),
+    edit: t("alert.edit"),
+    turnOn: t("alert.turnOn"),
+    remove: t("alert.remove"),
+    confirmRemove: t("alert.confirmRemove"),
+    confirmYes: t("alert.confirmYes"),
+    confirmNo: t("alert.confirmNo"),
+    addAnother: t("alert.addAnother"),
+    maxReached: t("alert.maxReached"),
+    today: t("alert.today"),
+    forecast30: t("alert.forecast30"),
+    chartAria: t("alert.chartAria"),
+    emailWhen: t("alert.emailWhen"),
+    dirAbove: t("alert.dirAbove"),
+    dirBelow: t("alert.dirBelow"),
+    rate: t("alert.rate"),
+    rateHint: t("alert.rateHint"),
+    oddsEmpty: t("alert.oddsEmpty"),
+    oddsAbove: t("alert.oddsAbove"),
+    oddsBelow: t("alert.oddsBelow"),
+    oddsPast: t("alert.oddsPast"),
+    oddsNoForecast: t("alert.oddsNoForecast"),
+    trendTitle: t("alert.trendTitle"),
+    trendSubAbove: t("alert.trendSubAbove"),
+    trendSubBelow: t("alert.trendSubBelow"),
+    lookAhead: t("alert.lookAhead"),
+    days: t("alert.days"),
+    trendNow: t("alert.trendNow"),
+    trendOnce: t("alert.trendOnce"),
+    keepTitle: t("alert.keepTitle"),
+    keepOn: t("alert.keepOn"),
+    keepOff: t("alert.keepOff"),
+    footnote: t("alert.footnote"),
+    stopOn: t("alert.stopOn"),
+    stopOff: t("alert.stopOff"),
+    emailsOff: t("alert.emailsOff"),
+    emailsOffBody: t("alert.emailsOffBody"),
+    earlyEmailsOff: t("alert.earlyEmailsOff"),
+    settingsLink: t("alert.settingsLink"),
+    cancel: t("alert.cancel"),
+    back: t("alert.back"),
+    create: t("alert.create"),
+    save: t("alert.save"),
+    saving: t("alert.saving"),
+    saved: t("alert.saved"),
+  };
 }

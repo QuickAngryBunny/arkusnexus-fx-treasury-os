@@ -47,6 +47,11 @@ export async function apiPut<T>(path: string, body: unknown = {}): Promise<ApiRe
   });
 }
 
+/** DELETE as the signed-in user. */
+export async function apiDelete<T>(path: string): Promise<ApiResult<T>> {
+  return send<T>(path, { method: "DELETE", headers: { Accept: "application/json", ...(await sessionHeaders()) } });
+}
+
 /** Raw call for the sign-in and password endpoints: status and JSON body, plus the browser's address and agent. */
 export async function authCall<T>(
   method: "GET" | "POST", path: string, body?: unknown,
@@ -311,4 +316,35 @@ export type NewsFeed = {
     fetchedAt: string;
     articles: { rank: number; lang: string; title: string; description: string | null; url: string; sourceName: string; sourceUrl: string | null; publishedAt: string }[];
   }[];
+};
+
+// Rate alerts (Phase 4, /api/tenant/alerts): the signed-in person's own alerts and what the drawer draws.
+export type RateAlert = {
+  id: number;
+  direction: "above" | "below";
+  rate: number;
+  earlyWarning: boolean;
+  lookAheadDays: 7 | 15 | 30;
+  keepOn: boolean;
+  isOn: boolean;
+  reachedAt: string | null;
+  createdAt: string;
+  chance30: number | null;
+  chanceLookAhead: number | null;
+};
+
+export type RateAlerts = {
+  today: { date: string; rate: number } | null;
+  history: { date: string; rate: number }[];
+  forecast: {
+    runId: number;
+    model: string;
+    asOf: string;
+    lastRate: number;
+    horizons: { days: number; point: number; lower80: number; upper80: number }[];
+  } | null;
+  trendRules: { lookAheadDays: number; needed: number; window: number }[];
+  emails: { reached: boolean; earlyWarning: boolean };
+  maxAlerts: number;
+  alerts: RateAlert[];
 };

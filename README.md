@@ -1,7 +1,8 @@
 # FX Intelligence & Treasury OS
 
 USD/MXN exchange-rate intelligence: rate history, forecasts and news (Phases 0–2), accounts and team (Phase 3),
-conversion plans as the main action (Phase 4) and an AI assistant (Phase 5). Built first for Arkus Nexus, later as
+rate alerts with trend early warnings (Phase 4), conversion plans as the main action (Phase 5) and an AI assistant
+(Phase 6). Built first for Arkus Nexus, later as
 multi-tenant SaaS. Treasury, exposure, cash flow, simulator, profitability, billing, self-serve sign-up and two-step
 verification are out of scope ([Phase 3 brief](docs/phase-3-brief.md)).
 
@@ -168,10 +169,16 @@ and adds at least one MXN and one USD bank (`/setup/banks`). Until that's done, 
 the step they're on; approvers and standard members go straight to the dashboard.
 
 Settings (user menu → Profile & settings): Profile (name, email change with a confirmation link, language, number
-format, time zone), Security (password change), Notifications (stored now; Phase 4 sends them), Company info (admins
+format, time zone), Security (password change), Notifications (rate alert emails now; plan emails with conversion plans), Company info (admins
 edit name, currencies and banks) and Team (admins only: invite, resend/cancel, change role, deactivate/reactivate, send
 a password reset). Invitees join at `/join?token=…`. Locally, emails only go to `Email:AllowedRecipients`; other
 addresses stay in the outbox.
+
+Rate alerts (Phase 4): "Alert me" on Exchange Forecast opens a drawer to set an alert on the Banxico FIX (rises to /
+falls to a rate), with an optional trend early warning (look ahead 7, 15 or 30 days) and "keep it on after it's
+reached". The API checks alerts every minute against the newest FIX and forecast run (`Platform:CheckRateAlerts`) and
+emails only the person who set them. Apply tenant migrations after pulling (`dotnet run --project src/FxOs.Migrator --
+tenants`).
 
 ## Email through Firebase (Phase 3)
 

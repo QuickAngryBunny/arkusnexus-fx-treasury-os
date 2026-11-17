@@ -5,7 +5,8 @@ Read this first. It holds the decisions and conventions agreed so far; the READM
 ## Product
 USD/MXN exchange-rate platform. Built first for Arkus Nexus, later multi-tenant SaaS.
 Scope (narrowed, see `docs/phase-3-brief.md`): rate history and forecast + news (Phases 0–2), accounts/team/tenant admin
-(Phase 3), conversion plans as the main action (Phase 4), AI assistant (Phase 5). **Out of scope — don't build or
+(Phase 3), rate alerts with trend early warnings (Phase 4), conversion plans as the main action (Phase 5), AI assistant
+(Phase 6). **Out of scope — don't build or
 scaffold:** treasury, currency exposure, cash flow, simulator, profitability, billing/subscriptions, self-serve sign-up,
 MFA/two-step verification.
 - PRD: project doc "FX intelligence 1.docx" (modules 01–11; narrowed by the Phase 3 brief).
@@ -34,7 +35,8 @@ MFA/two-step verification.
 - Email: Firebase is only the sender (Trigger Email extension, Firestore `mail` collection). Firebase does no auth and
   holds no user data. Locally the API writes to the real Firebase project (test addresses only); the service-account
   key stays outside the repo (hosted: the Cloud Run service account, no key).
-- Alerts belong to conversion plans (Phase 4); AI in Phase 5. LLM: Azure OpenAI, GPT‑6.1 Terra (Phase 5).
+- Rate alerts are Phase 4 (the plan's "rate reached target" email moved there); conversion plans Phase 5 add plan
+  alerts on top; AI in Phase 6. LLM: Azure OpenAI, GPT‑6.1 Terra (Phase 6).
 
 ## Architecture (ADR 0001: docs/decisions/0001-database-per-tenant.md)
 - One PostgreSQL database (Cloud SQL hosted; TimescaleDB image locally) and login role per tenant, including its own copy of rate history.
@@ -81,7 +83,7 @@ MFA/two-step verification.
   `forward` (interest-rate parity), `ewma_vol`, `naive`; `fxworkers forecast run`; APIs for analytics and forecasts; Exchange Forecast follows R-01 (today hero card, trend, 30D volatility level, plum
   forecast card + 12-month chart with 7D–180D horizon pills, biggest one-day move, rate-gap driver) and
   `/forecast/models` follows P4-04 (leaderboard vs naive per horizon). Build screens from the design canvas artboards
-  (R-*, P*-*, J*), not from scratch; "Alert me" (P2-04) stays disabled until built. `/forecast/history` follows R-02:
+  (R-*, P*-*, J*), not from scratch; "Alert me" opens the P2-04 drawer (Phase 4). `/forecast/history` follows R-02:
   year/month/day views (URL-driven), gaps from a deterministic Mexican bank-holiday calendar (`MexicanBankCalendar`),
   "Mark holiday" (V0006 `rate_gap_resolution`, audited), "Re-fetch"/"Sync now" record a `sync_request` that the
   worker's scheduler processes every minute (fetch once, load every tenant), CSV export of the shown view.
@@ -161,7 +163,7 @@ MFA/two-step verification.
   AppShell sends an admin with unfinished onboarding to the next setup step (other roles never see it). Locale: switch
   cookie → profile language → company default. Server actions in `app/settings/actions.ts`; `ActionForm` takes strings
   only (no functions across the client boundary). Dashboard O-05: welcome/joined notice, first-plan card with bank chips
-  (button disabled until Phase 4), empty "Ongoing conversions", news from the tenant DB, "Invite your team" for admins.
+  (button disabled until Phase 5), empty "Ongoing conversions", news from the tenant DB, "Invite your team" for admins.
   Sprint 7 security review (2026-11-16): no exploitable findings; hardening done: email change needs the current
   password and its confirmation ends every session and open reset links; a password change revokes open reset links;
   an expired invitation renews once (control V0005 `invitation.renewed_from`) and only within 30 days of expiring;
@@ -171,6 +173,22 @@ MFA/two-step verification.
   every 10 s) copies `account.*`, `invitation.*`, `membership.*` from `control_audit_log` into each company's audit log,
   once; `EmailClocks` picks email times: profile zone → company zone once confirmed → Mexico City (setup invitation
   stays Mexico City); approval-request notifications are listed/settable for approvers and admins only.
+- Phase 4 (rate alerts and early warnings, build plan Phase 4): tenant V0012 `rate_alert` (owner `user_id`, above/below,
+  rate, early warning + look-ahead 7/15/30, keep-on, checker state `armed`/`warned`/`checked_fix_date`/`checked_run_id`,
+  soft delete) and `rate_alert_event` (unique per alert+kind+FIX date; `id` = the email's outbox id, `email_status`
+  pending/queued/skipped); notification type `rate_early_warning` (U-03 "Rate alerts" group with `rate_target_reached`).
+  `FxOs.Platform/Alerts`: `RateAlertMath` (chance of reaching a rate within N days from the stored run's central value
+  and 8-in-10 range, normal spread, max over days; trend rule 3 of last 5 moves for 7 days, 5 of 8 for 15, 7 of 12 for
+  30), `RateAlertRules.Check` (pure: reached → email, keep-on off switches off, keep-on re-arms after moving back; early
+  warning when trend holds and chance > 50%, once per trend), `RateAlertChecker` (hosted every minute,
+  `Platform:CheckRateAlerts`, off in tests; only alerts whose FIX date or run changed; event + state + audit in one tenant
+  transaction, then `EmailOutbox.EnqueueAsync(..., id)` idempotent; only the creator, only while an active member, and
+  only if their U-03 switch is on). Emails `rate_alert_reached` (P2-S2) and `rate_alert_early_warning` (P2-S3), EN/ES,
+  rates with 2 decimals in the profile number format, button → `/forecast?alerts=open`. API `/api/tenant/alerts`
+  (GET drawer data, POST, PUT = edit or turn back on, DELETE; your own alerts only, 404 otherwise; max 20).
+  Web: `RateAlertDrawer` — list view when you have alerts (edit, turn back on, delete with inline confirm, add another),
+  form view otherwise; the rate field's placeholder is today's FIX; live odds from `lib/alerts.ts` (mirrors
+  `RateAlertMath`; the API's value is the one that counts).
 - Forecast rule: publish every model's backtest next to the naive benchmark; do not present a model as better than
   naive unless `mae_vs_naive` < 1 for that horizon.
 - Phase 0 sprint 3 (moved to the hosting work): Google Cloud internal environment, deploy workflow running per-tenant

@@ -10,10 +10,12 @@ import { getSession } from "@/lib/session";
 export const metadata: Metadata = { title: "Notifications · Settings" };
 export const dynamic = "force-dynamic";
 
-const PLANS = ["conversion_reminder", "final_rate_needed", "plan_status_change", "rate_target_reached", "approval_request", "approval_decision", "followed_plan"];
+// Rate alerts (Phase 4) send these two; the plan emails start with conversion plans (Phase 5).
+const ALERTS = ["rate_target_reached", "rate_early_warning"];
+const PLANS = ["conversion_reminder", "final_rate_needed", "plan_status_change", "approval_request", "approval_decision", "followed_plan"];
 const FORECAST = ["forecast_move", "weekly_forecast_summary"];
 
-/** U-03 Notifications: an email switch per item. Stored now; Phase 4 and later send them. */
+/** U-03 Notifications: an email switch per item. Rate alerts send theirs now; plan emails start in Phase 5. */
 export default async function NotificationsPage() {
   const { t } = await getSession();
   const result = await apiGet<NotificationSetting[]>("/api/tenant/me/notifications");
@@ -35,6 +37,7 @@ export default async function NotificationsPage() {
     <SettingsShell page="notifications" eyebrow={t("notif.eyebrow")}>
       <ActionForm action={saveNotifications} submit={t("settings.save")} pending={t("onb.saving")} saved={t("settings.saved")} className="card stack">
         <input type="hidden" name="codes" value={items.map((n) => n.code).join(",")} />
+        {section("notif.alerts", ALERTS)}
         {section("notif.plans", PLANS)}
         {section("notif.forecast", FORECAST)}
         <p className="subtitle">{t("notif.later")}</p>

@@ -25,8 +25,12 @@ public sealed partial class EmailOutbox(IDataProtectionProvider dataProtection)
 
     private readonly IDataProtector _protector = dataProtection.CreateProtector(ProtectorPurpose);
 
+    /// <summary>
+    /// Queues <paramref name="message"/>. With an <paramref name="id"/> the call is idempotent: queuing the same id again
+    /// (a retry after the caller's own change committed elsewhere, e.g. a rate alert event) adds nothing.
+    /// </summary>
     public async Task<Guid> EnqueueAsync(
-        NpgsqlConnection conn, NpgsqlTransaction? tx, EmailMessage message, CancellationToken ct = default)
+        NpgsqlConnection conn, NpgsqlTransaction? tx, EmailMessage message, CancellationToken ct = default, Guid? id = null)
     {
         ArgumentNullException.ThrowIfNull(conn);
         ArgumentNullException.ThrowIfNull(message);
@@ -45,6 +49,28 @@ public sealed partial class EmailOutbox(IDataProtectionProvider dataProtection)
         ArgumentException.ThrowIfNullOrWhiteSpace(message.Html);
 
         var body = _protector.Protect(JsonSerializer.Serialize(new EmailBody(message.Html, message.Text), Json));
+        if (id is { } fixedId)
+        {
+            await conn.ExecAsync(
+                """
+                insert into email_outbox (id, tenant_id, template, locale, to_email, subject, body_protected)
+                values (@id, @tenantId, @template, @locale, @to, @subject, @body)
+                on conflict (id) do nothing
+                """,
+                new
+                {
+                    id = fixedId,
+                    tenantId = message.TenantId,
+                    template = message.Template,
+                    locale = message.Locale,
+                    to = message.To.Trim().ToLowerInvariant(),
+                    subject = message.Subject,
+                    body,
+                },
+                tx, ct);
+            return fixedId;
+        }
+
         return (await conn.ScalarAsync<Guid>(
             """
             insert into email_outbox (tenant_id, template, locale, to_email, subject, body_protected)
