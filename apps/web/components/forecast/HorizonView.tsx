@@ -403,6 +403,181 @@ export function NewsCard({ events }: { events: NewsEvent[] }) {
   );
 }
 
+/** One big move in the mobile history card (layout B). Text is formatted on the server. */
+export type MobileMove = {
+  key: string; // "move:YYYY-MM-DD" (shared with the News card selection)
+  day: number;
+  rate: number;
+  n: number; // marker number, chronological
+  title: string;
+  date: string;
+  rateLabel: string;
+  change: string;
+  up: boolean;
+  why: string;
+  headline: { title: string; source: string; url: string } | null;
+};
+
+export type MobileText = {
+  kicker: string; // "Where it could go"
+  by: Record<string, string>; // horizon key → "by 10 Dec"
+  todayLabel: string; // "Today 18.62"
+  chance: Record<string, string>; // horizon key → "8 in 10 chance between … and …"
+  fanAria: Record<string, string>;
+  historyTitle: string; // "Last 12 months"
+  lowHigh: string; // "low 16.87 · high 18.81"
+  firstMonth: string;
+  midMonth: string;
+  today: string;
+  historyAria: string;
+  moreMoves: string | null; // link text when more moves exist than are listed
+  moreHref: string;
+  noMoves: string;
+  readLabel: string;
+};
+
+const MOBILE_HORIZONS = ["7D", "30D", "90D", "180D"];
+
+/**
+ * Phone layout "B · Forecast and history as two cards": a plum forecast card (horizon pills, value by date, fan with
+ * high / expected / low at its edge) and a white 12-month card (sparkline with numbered big moves and a list of them).
+ */
+export function MobileForecast({ data, moves, text }: { data: ChartData; moves: MobileMove[]; text: MobileText }) {
+  const { horizon, horizons, select, event, selectEvent } = useHorizon();
+  const [open, setOpen] = useState<string | null>(null);
+  const nf = useMemo(() => new Intl.NumberFormat(data.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), [data.locale]);
+  const pills = horizons.filter((h) => MOBILE_HORIZONS.includes(h.key));
+  const active = pills.some((h) => h.key === horizon.key) ? horizon : (pills.find((h) => h.key === "30D") ?? horizon);
+
+  const fan = useMemo(() => {
+    const W = 330, H = 150, X0 = 8, X1 = 272;
+    const last = data.history[data.history.length - 1]!;
+    const pts = data.fan.filter((p) => p.horizonDays <= active.days);
+    const end = pts.length ? pts[pts.length - 1]! : null;
+    if (!end) return null;
+    const lo = Math.min(last.rate, ...pts.map((p) => p.lower95)), hi = Math.max(last.rate, ...pts.map((p) => p.upper95));
+    const pad = (hi - lo) * 0.06;
+    const y = (v: number) => H - 10 - ((v - (lo - pad)) / (hi - lo + 2 * pad)) * (H - 20);
+    const x = (day: number) => X0 + ((day - last.day) / (end.day - last.day || 1)) * (X1 - X0);
+    const path = [{ day: last.day, point: last.rate, lower80: last.rate, upper80: last.rate, lower95: last.rate, upper95: last.rate }, ...pts];
+    const edge = (k: "point" | "lower80" | "upper80" | "lower95" | "upper95") => path.map((p) => `${x(p.day).toFixed(1)},${y(p[k]).toFixed(1)}`);
+    const band = (a: "lower80" | "lower95", b: "upper80" | "upper95") => `M${[...edge(b), ...edge(a).reverse()].join(" L")} Z`;
+    // Edge labels: keep at least 14px apart so they never overlap.
+    let yHi = y(end.upper80), yMid = y(end.point), yLo = y(end.lower80);
+    yHi = Math.min(yHi, yMid - 14);
+    yLo = Math.max(yLo, yMid + 14);
+    return { W, H, X0, y0: y(last.rate), band95: band("lower95", "upper95"), band80: band("lower80", "upper80"),
+      line: `M${edge("point").join(" L")}`, yHi, yMid, yLo, end };
+  }, [data, active]);
+
+  const spark = useMemo(() => {
+    const W = 330, H = 110;
+    const pts = data.history;
+    if (pts.length < 2) return null;
+    const first = pts[0]!.day, lastDay = pts[pts.length - 1]!.day;
+    const lo = Math.min(...pts.map((p) => p.rate)), hi = Math.max(...pts.map((p) => p.rate));
+    const x = (d: number) => ((d - first) / (lastDay - first || 1)) * W;
+    const y = (v: number) => H - 12 - ((v - lo) / (hi - lo || 1)) * (H - 24);
+    return { W, H, x, y, line: pts.map((p, i) => `${i ? "L" : "M"}${x(p.day).toFixed(1)},${y(p.rate).toFixed(1)}`).join(" ") };
+  }, [data]);
+
+  return (
+    <div className="fx-mobile">
+      {fan && (
+        <section className="fx-m-forecast" aria-label={text.kicker}>
+          <span className="fx-m-kicker">{text.kicker}</span>
+          <div role="radiogroup" aria-label={data.labels.horizon} className="fx-m-pills">
+            {pills.map((h) => (
+              <button key={h.key} type="button" role="radio" aria-checked={h.key === active.key} onClick={() => select(h.key)}>
+                {h.pillLabel}
+              </button>
+            ))}
+          </div>
+          <div className="fx-m-value">
+            <strong>{active.base}</strong>
+            <span>{text.by[active.key]}</span>
+          </div>
+          <svg viewBox={`0 0 ${fan.W} ${fan.H}`} width="100%" role="img" aria-label={text.fanAria[active.key]} className="fx-m-fan">
+            <path d={fan.band95} fill="#FFFFFF" fillOpacity={0.12} />
+            <path d={fan.band80} fill="#FFFFFF" fillOpacity={0.22} />
+            <path d={fan.line} stroke="#FFFFFF" strokeWidth={2.5} strokeDasharray="6 5" fill="none" />
+            <circle cx={fan.X0} cy={fan.y0} r={6} fill="#3E1F55" stroke="#FFFFFF" strokeWidth={3} />
+            <g fontFamily="inherit" fontSize={12} fontWeight={700} fill="#FFFFFF" textAnchor="end">
+              <text x={326} y={fan.yHi + 4}>{nf.format(fan.end.upper80)}</text>
+              <text x={326} y={fan.yMid + 4}>{nf.format(fan.end.point)}</text>
+              <text x={326} y={fan.yLo + 4}>{nf.format(fan.end.lower80)}</text>
+            </g>
+            <text x={16} y={Math.min(fan.y0 + 22, fan.H - 2)} fontFamily="inherit" fontSize={12} fontWeight={700} fill="#D9C4F2">
+              {text.todayLabel}
+            </text>
+          </svg>
+          <span className="fx-m-note">{text.chance[active.key]}</span>
+        </section>
+      )}
+
+      {spark && (
+        <section className="fx-m-history" aria-label={text.historyTitle}>
+          <div className="fx-m-history__head">
+            <strong>{text.historyTitle}</strong>
+            <span>{text.lowHigh}</span>
+          </div>
+          <svg viewBox={`0 0 ${spark.W} ${spark.H}`} width="100%" role="img" aria-label={text.historyAria} className="fx-m-spark">
+            <path d={spark.line} fill="none" stroke="#6C10E0" strokeWidth={2.5} strokeLinejoin="round" />
+            {moves.map((m) => {
+              const on = event === m.key;
+              return (
+                <g key={m.key}>
+                  <circle cx={spark.x(m.day)} cy={spark.y(m.rate)} r={10} fill={on ? "#E8582E" : "#FFFFFF"} stroke="#E8582E" strokeWidth={2.5} />
+                  <text x={spark.x(m.day)} y={spark.y(m.rate) + 4} textAnchor="middle" fontFamily="inherit" fontSize={11} fontWeight={800} fill={on ? "#FFFFFF" : "#A33A16"}>
+                    {m.n}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+          <div className="fx-m-axis" aria-hidden="true"><span>{text.firstMonth}</span><span>{text.midMonth}</span><strong>{text.today}</strong></div>
+          {moves.length === 0 ? (
+            <p className="fx-m-empty">{text.noMoves}</p>
+          ) : (
+            <div className="fx-m-moves">
+              {moves.map((m) => {
+                const isOpen = open === m.key;
+                return (
+                  <div key={m.key} className={`fx-m-move${isOpen ? " is-open" : ""}`}>
+                    <button
+                      type="button"
+                      aria-expanded={isOpen}
+                      onClick={() => {
+                        setOpen(isOpen ? null : m.key);
+                        selectEvent(isOpen ? "today" : m.key);
+                      }}
+                    >
+                      <span className="fx-m-move__n" aria-hidden="true">{m.n}</span>
+                      <span className="fx-m-move__text"><strong>{m.title}</strong><span>{m.date} · {m.rateLabel}</span></span>
+                      <span className={m.up ? "fx-up" : "fx-down"}>{m.change}</span>
+                    </button>
+                    {isOpen && (
+                      <div className="fx-m-move__body">
+                        <p>{m.why}</p>
+                        {m.headline && (
+                          <a href={m.headline.url} target="_blank" rel="noopener noreferrer">
+                            {m.headline.title} <span>· {m.headline.source} · {text.readLabel} ↗</span>
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {text.moreMoves && <a href={text.moreHref} className="fx-why__link">{text.moreMoves}</a>}
+            </div>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
+
 function niceStep(raw: number): number {
   const pow = 10 ** Math.floor(Math.log10(raw || 1));
   const n = raw / pow;

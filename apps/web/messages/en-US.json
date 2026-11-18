@@ -730,5 +730,15 @@
   "alert.offNotice": "This alert is off",
   "alert.offReached": "This alert is off · reached {date}",
   "alert.offBody": "Saving turns it back on, starting from the next FIX.",
-  "alert.saveTurnOn": "Save and turn on"
+  "alert.saveTurnOn": "Save and turn on",
+  "mob.kicker": "Where it could go",
+  "mob.by": "by {date}",
+  "mob.today": "Today {rate}",
+  "mob.historyTitle": "Last 12 months",
+  "mob.lowHigh": "low {lo} · high {hi}",
+  "mob.historyAria": "USD/MXN over the last 12 months with {n} big moves marked",
+  "mob.more": "{n} more big moves in the full history →",
+  "mob.noMoves": "No big moves in the last 12 months.",
+  "mob.todayChange": "{pct} today",
+  "mob.trendWeeks": "{trend} · {n} weeks"
 }

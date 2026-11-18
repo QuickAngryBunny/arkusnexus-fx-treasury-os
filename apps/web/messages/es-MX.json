@@ -730,5 +730,15 @@
   "alert.offNotice": "Esta alerta está apagada",
   "alert.offReached": "Esta alerta está apagada · alcanzada el {date}",
   "alert.offBody": "Al guardar se vuelve a encender, a partir del siguiente FIX.",
-  "alert.saveTurnOn": "Guardar y encender"
+  "alert.saveTurnOn": "Guardar y encender",
+  "mob.kicker": "Hacia dónde podría ir",
+  "mob.by": "al {date}",
+  "mob.today": "Hoy {rate}",
+  "mob.historyTitle": "Últimos 12 meses",
+  "mob.lowHigh": "mínimo {lo} · máximo {hi}",
+  "mob.historyAria": "USD/MXN en los últimos 12 meses con {n} movimientos grandes marcados",
+  "mob.more": "{n} movimientos grandes más en el historial completo →",
+  "mob.noMoves": "Sin movimientos grandes en los últimos 12 meses.",
+  "mob.todayChange": "{pct} hoy",
+  "mob.trendWeeks": "{trend} · {n} semanas"
 }

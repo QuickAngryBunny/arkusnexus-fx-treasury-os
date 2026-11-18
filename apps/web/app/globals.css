@@ -393,3 +393,58 @@ body {
 .fx-alerts__add:hover { background: var(--vi-plum); }
 .fx-alerts__add:focus-visible { outline: none; box-shadow: var(--vi-focus); }
 .fx-alerts__add:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Exchange Forecast on phones: layout B, forecast and history as two cards (R-M2) ── */
+.fx-phone { display: none; }
+@media (max-width: 700px) {
+  .fx-desktop { display: none; }
+  .fx-phone { display: flex; flex-direction: column; gap: 14px; }
+}
+.fx-mobile { display: flex; flex-direction: column; gap: 14px; }
+.fx-m-rate { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 10px; }
+.fx-m-rate strong { font-size: 36px; font-weight: 800; letter-spacing: -0.03em; color: var(--vi-plum); font-variant-numeric: tabular-nums; }
+.fx-m-rate > span:not(.fx-m-chip) { font-size: 13px; }
+.fx-m-chip { font-size: 12px; font-weight: 800; padding: 3px 9px; border-radius: 999px; background: var(--vi-canvas); color: var(--vi-ink-2); }
+.fx-m-chip--up { background: var(--vi-green-tint); color: var(--vi-green-ink); }
+.fx-m-chip--down { background: var(--vi-orange-tint); color: var(--vi-orange-ink); }
+.fx-m-forecast { background: var(--vi-plum); color: var(--vi-white); border-radius: 26px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.fx-m-kicker { font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--vi-on-plum); }
+.fx-m-pills { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgb(255 255 255 / 12%); }
+.fx-m-pills button {
+  flex: 1; min-height: 36px; border-radius: 999px; border: none; background: transparent; color: var(--vi-white);
+  font: inherit; font-weight: 700; font-size: 13px; cursor: pointer;
+}
+.fx-m-pills button[aria-checked="true"] { background: var(--vi-white); color: var(--vi-plum); }
+.fx-m-pills button:focus-visible { outline: none; box-shadow: var(--vi-focus); }
+.fx-m-value { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.fx-m-value strong { font-size: 34px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.fx-m-value span { font-size: 13px; color: var(--vi-on-plum); }
+.fx-m-fan, .fx-m-spark { display: block; overflow: visible; }
+.fx-m-note { font-size: 13px; line-height: 1.45; color: var(--vi-on-plum); }
+.fx-m-history { background: var(--vi-white); border-radius: 26px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.fx-m-history__head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.fx-m-history__head strong { font-size: 15px; }
+.fx-m-history__head span { font-size: 12px; color: var(--vi-muted); }
+.fx-m-axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--vi-muted); }
+.fx-m-axis strong { color: var(--vi-plum); }
+.fx-m-empty { margin: 0; font-size: 13px; color: var(--vi-muted); }
+.fx-m-moves { display: flex; flex-direction: column; gap: 6px; }
+.fx-m-move { border: 1.5px solid var(--vi-mist); border-radius: 16px; background: var(--vi-white); }
+.fx-m-move.is-open { border-color: var(--vi-lilac); background: #fbf8ff; }
+.fx-m-move > button {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: none; background: transparent;
+  font: inherit; color: var(--vi-ink); text-align: left; cursor: pointer; border-radius: 16px;
+}
+.fx-m-move > button:focus-visible { outline: none; box-shadow: var(--vi-focus); }
+.fx-m-move > button > span:last-child { font-size: 12px; white-space: nowrap; }
+.fx-m-move__n {
+  width: 22px; height: 22px; flex: 0 0 22px; border-radius: 50%; background: var(--vi-orange); color: var(--vi-white);
+  font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center;
+}
+.fx-m-move__text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.fx-m-move__text strong { font-size: 14px; }
+.fx-m-move__text span { font-size: 12px; color: var(--vi-muted); }
+.fx-m-move__body { padding: 0 12px 12px 44px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.5; color: var(--vi-ink-2); }
+.fx-m-move__body p { margin: 0; }
+.fx-m-move__body a { color: var(--vi-ink); font-weight: 700; text-decoration: none; }
+.fx-m-move__body a span { font-weight: 500; color: var(--vi-muted); }

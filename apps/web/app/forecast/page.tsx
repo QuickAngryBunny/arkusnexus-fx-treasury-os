@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { AlertBanner, Button, HeroCard, PageHeader, StatCard } from "@fxos/ui";
 import { AppShell } from "@/components/AppShell";
-import { ForecastCard, HorizonProvider, NewsCard, RateChart, type ChartData, type HorizonData, type NewsEvent } from "@/components/forecast/HorizonView";
+import {
+  ForecastCard, HorizonProvider, MobileForecast, NewsCard, RateChart,
+  type ChartData, type HorizonData, type MobileMove, type MobileText, type NewsEvent,
+} from "@/components/forecast/HorizonView";
 import { RateAlertDrawer, RateAlertsCard, type AlertDrawerLabels } from "@/components/forecast/RateAlertDrawer";
 import { apiGet, type ForecastCheck, type Forecasts, type LatestRate, type NewsFeed, type RateAlerts, type RateAnalytics, type RateHistory, type RateSource } from "@/lib/api";
 import { CURRENCY_DIGITS, formatDateTime, formatRate, formatSigned, type Locale, type MessageKey, type Translate } from "@/lib/i18n";
@@ -259,6 +262,66 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
     },
   };
 
+  // ── Phone layout B: two cards. The five largest moves of the year, numbered by date. ──
+  const MAX_MOBILE_MOVES = 5;
+  const yearMoves = (feed?.moves ?? []).filter((m) => toDay(m.date) >= toDay(from));
+  const topMoves = [...yearMoves].sort((x, y) => Math.abs(y.sigma) - Math.abs(x.sigma)).slice(0, MAX_MOBILE_MOVES)
+    .sort((x, y) => x.date.localeCompare(y.date));
+  const mobileMoves: MobileMove[] = topMoves.map((m, i) => {
+    const w = feed?.windows.find((x) => x.key === `move:${m.date}`);
+    const top = w?.articles[0];
+    return {
+      key: `move:${m.date}`,
+      day: toDay(m.date),
+      rate: m.rate,
+      n: i + 1,
+      title: t(m.changePct > 0 ? "news.moveUp" : "news.moveDown", { s: formatRate(locale, Math.abs(m.sigma), 1) }),
+      date: dayMonthYear(m.date),
+      rateLabel: rate(m.rate),
+      change: formatSigned(locale, m.changePct, 2, "%"),
+      up: m.changePct > 0,
+      why: t(m.changePct > 0 ? "news.moveWhyUp" : "news.moveWhyDown", {
+        pct: formatRate(locale, Math.abs(m.changePct), 2), n: times(m.sigma), vol: `${formatRate(locale, m.vol30Pct, 1)}%`,
+      }),
+      headline: top ? { title: top.title, source: top.sourceName, url: top.url } : null,
+    };
+  });
+  const lows = points.map((p) => p.rate);
+  const mobileText: MobileText = {
+    kicker: t("mob.kicker"),
+    by: Object.fromEntries(horizons.map((h) => [h.key, t("mob.by", { date: h.targetLabel })])),
+    todayLabel: t("mob.today", { rate: rate(r.rate) }),
+    chance: Object.fromEntries(horizons.map((h) => [h.key, h.note])),
+    fanAria: Object.fromEntries(horizons.map((h) => [h.key, h.chartAria])),
+    historyTitle: t("mob.historyTitle"),
+    lowHigh: lows.length ? t("mob.lowHigh", { lo: rate(Math.min(...lows)), hi: rate(Math.max(...lows)) }) : "",
+    firstMonth: points.length ? fmtDate(points[0]!.date, { month: "short", year: "2-digit" }) : "",
+    midMonth: points.length ? fmtDate(points[Math.floor(points.length / 2)]!.date, { month: "short" }) : "",
+    today: t("fx.chartToday"),
+    historyAria: t("mob.historyAria", { n: mobileMoves.length }),
+    moreMoves: yearMoves.length > mobileMoves.length ? t("mob.more", { n: yearMoves.length - mobileMoves.length }) : null,
+    moreHref: "/forecast/history?view=year",
+    noMoves: t("mob.noMoves"),
+    readLabel: t("news.read"),
+  };
+  const mobileRate = (
+    <div className="fx-m-rate">
+      <strong>{rate(r.rate)}</strong>
+      {r.changePct !== null && (
+        <span className={r.changePct > 0 ? "fx-up" : r.changePct < 0 ? "fx-down" : "muted"}>
+          {t("mob.todayChange", { pct: formatSigned(locale, r.changePct, 2, "%") })}
+        </span>
+      )}
+      {a && a.trend !== "unknown" && (
+        <span className={`fx-m-chip fx-m-chip--${a.trend}`}>
+          {Math.abs(a.streakWeeks) >= 2 && Math.sign(a.streakWeeks) === (a.trend === "up" ? 1 : a.trend === "down" ? -1 : 0)
+            ? t("mob.trendWeeks", { trend: t(`fx.trend.${a.trend}` as MessageKey), n: Math.abs(a.streakWeeks) })
+            : t(`fx.trend.${a.trend}` as MessageKey)}
+        </span>
+      )}
+    </div>
+  );
+
   const failedLoad = source?.lastLoad?.status === "failed" ? source.lastLoad : null;
 
   // Bottom-right: the person's rate alerts (or an introduction with "Create alert"); opens the header's drawer.
@@ -291,8 +354,14 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
 
       {horizons.length > 0 && points.length > 1 ? (
         <HorizonProvider horizons={horizons} initial={horizons.find((h) => h.key === "30D")?.key ?? horizons[0]!.key}>
-          {todayRow(true)}
-          <RateChart data={chart} />
+          <div className="fx-desktop">
+            {todayRow(true)}
+            <RateChart data={chart} />
+          </div>
+          <div className="fx-phone">
+            {mobileRate}
+            <MobileForecast data={chart} moves={mobileMoves} text={mobileText} />
+          </div>
           <section className="fx-bottom">
             <NewsCard events={events} />
             {alertsCard}
